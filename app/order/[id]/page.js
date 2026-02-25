@@ -1,45 +1,18 @@
 "use client";
 import Link from "next/link";
-import {useState,useEffect} from "react";
+import React from "react";
 import { supabase } from "@/lib/supabase";
 
-export default function Page() {
-  const [selectedCategory, setSelectedCategory] = useState("Recommend");
-  const [categories, setCategories] = useState([]);
-  const [myFoods, setMyFoods] = useState([]);
-  const [cart, setCart] =useState({});
-  
-  const updateQty = (id, delta) => {
-    setCart((prev) => {
-      const currentQty = prev[id] || 0;
-      const newQty = Math.max(0, currentQty + delta);
-      
-      // ສ້າງ Object ໃໝ່ເພື່ອບໍ່ໃຫ້ກະທົບກັບ State ເກົ່າໂດຍກົງ
-      const newCart = { ...prev, [id]: newQty };
+export default function Page({
+    params
+}) {
+  const {id} = React.use(params);
+  const [selectedCategory, setSelectedCategory] = React.useState("Recommend");
+  const [categories, setCategories] = React.useState([]);
+  const [myFoods, setMyFoods] = React.useState([]);
 
-      // ຖ້າຈຳນວນເປັນ 0 ໃຫ້ລຶບ ID ນັ້ນອອກຈາກ Cart
-      if (newQty === 0) {
-        delete newCart[id];
-      }
-
-      // Save ລົງ localStorage (ກວດສອບວ່າມີ window ກ່ອນເພື່ອປ້ອງກັນ error ໃນ server side)
-      if (typeof window !== "undefined") {
-        localStorage.setItem("puckluck_cart", JSON.stringify(newCart));
-      }
-      
-      return newCart;
-    });
-  };
-
-// ເພີ່ມ useEffect ນີ້ເຂົ້າໄປໃນ Page Component
-useEffect(() => {
-  const savedCart = localStorage.getItem("puckluck_cart");
-  if (savedCart) {
-    setCart(JSON.parse(savedCart));
-  }
-}, []);
-
-   useEffect(() => {
+   React.useEffect(() => {
+    console.log("Table number:",id)
     async function fetchData() {
       const { data: catData, error: catError } = await supabase
         .from("Categories")
@@ -58,7 +31,8 @@ useEffect(() => {
       if (menuError) console.error("Error Menus:", menuError.message);
     }
     fetchData()
-  }, []); 
+  }, [id]); 
+  
 
   return (
     <div className="w-full bg-white min-h-screen">
@@ -132,25 +106,15 @@ useEffect(() => {
                         {food.laoName}
                       </span>
                     </div>
-            
-                 <div className="flex items-center gap-3 bg-gray-50 px-2 py-1 rounded-xl shadow-inner">
-                      <button
-                        onClick={() => updateQty(food.menu_id, -1)}
-                        className="text-yellow-500 font-bold w-6 h-6 flex items-center justify-center hover:scale-125 transition-all"
-                      >
-                        -
-                      </button>
-                      <span className="font-bold text-sm text-black min-w-[15px] text-center">
-                        {cart[food.menu_id] || 0}
-                      </span>
-                      <button
-                        onClick={() => updateQty(food.menu_id, 1)}
-                        className="text-yellow-500 font-bold w-6 h-6 flex items-center justify-center hover:scale-125 transition-all"
-                      >
-                        +
-                      </button>
-                    </div>
-                  
+                    <Link href={`/my-oder/`}>
+                      <div className="p-1 border rounded-md">
+                        <img
+                          className="h-3 w-3"
+                          src="/icon/next.svg"
+                          alt="next"
+                        />
+                      </div>
+                    </Link>
                   </div>
                   <span className="text-yellow-500 font-bold mt-1 text-xl">
                     {food.price.toLocaleString()} kip

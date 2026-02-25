@@ -1,38 +1,162 @@
 "use client";
-import { useState } from "react";
-import { Bell, Settings, Phone } from 'lucide-react';
-
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import { Clock, CheckCircle,Play,Timer, PlayCircle, Utensils } from 'lucide-react';
+import { updateData } from '../services/actions';
+import { refresh } from 'next/cache';
+import {cn} from '../../lib/utils/cn'
 
 export default function KitchenPage() {
-  // ສ້າງ State ຈຳລອງຂໍ້ມູນ (ຕອນນີ້ໃຫ້ເປັນ Array ຫວ່າງກ່ອນກໍໄດ້)
-  const [orders, setOrders] = useState([]); 
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+
+  // 1. ຟັງຊັນດຶງຂໍ້ມູນ (Fetch) ໂດຍ Join 3 ຕາຕະລາງ: Orders + Order_Details + Menus
+  const fetchKitchenOrders = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('Orders')
+      .select(`
+        order_id,
+        order_status,
+        order_date,
+        Order_Details!order_id (  
+          quantity,
+          Menus ( menu_name, laoName )
+        )
+      `)
+      .in('order_status', ['pending', 'cooking','ready'])
+      .order('order_date', { ascending: true });
+
+    if (error) throw error;
+    setOrders(data || []);
+  } catch (err) {
+    console.error("Fetch Error:", err.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // 2. ຕັ້ງຄ່າ Real-time ໃຫ້ອັບເດດອັດຕະໂນມັດເມື່ອມີການ Insert/Update ໃນ Supabase
+  useEffect(() => {
+    fetchKitchenOrders();
+
+    const channel = supabase
+      .channel('kitchen_realtime')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'Orders' }, 
+        () => fetchKitchenOrders()
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, []);
+
+  // 3. ຟັງຊັນປ່ຽນສະຖານະອໍເດີ (Update Status)
+  const handleUpdateStatus = async (id, nextStatus) => {
+    const { error } = await supabase
+      .from('Orders')
+      .update({ order_status: nextStatus })
+      .eq('order_id', id);
+    
+    if (!error) fetchKitchenOrders();
+  };
+
+  if (loading) return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white font-lao">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-orange-500 mb-4 mx-auto"></div>
+        ກຳລັງໂຫລດລາຍການອາຫານ...
+      </div>
+    </div>
+  );
+
+  const updateOrderStatus = async (OrderID, currentStatus) =>{
+    let nextStatus="";
+
+    if (currentStatus === "pending") nextStatus="cooking";
+    else if (currentStatus === "cooking") nextStatus ="ready";
+    else if (currentStatus === "ready") nextStatus ="completed";
+    
+    if (!nextStatus) return;
+
+    const {error} = await supabase
+    .from ('Orders')
+    .update ({order_status: nextStatus})
+    .eq('order_id', OrderID);
+
+    if (!error) {
+    fetchKitchenOrders(); // ดึงข้อมูลใหม่มาแสดงทันที
+  } else {
+    console.error("Update Error:", error.message);
+    alert("ບໍ່ສາມາດອັບເດດສະຖານະໄດ້: " + error.message);
+  }
+};
 
   return (
-    // Container ຫຼັກ: ພື້ນຫຼັງສີເທົາອ່ອນ, ເຕັມຈໍ, ມີການຍັບຍໍ້ (Padding)
-    <div className="min-h-screen bg-gray-50  font-sans">
-      
-      {/* --- ສ່ວນຫົວ (Top Bar) --- */}
-      <div className="flex justify-between items-center mb-8 bg-[#444] text-white p-3 ">
-        <div className="flex items-center gap-1">
-          <h1 className="text-xl font-bold">{orders.length} Order</h1>
-          <Bell size={20} className="text-gray-400 cursor-pointer hover:text-white" />
-        </div>
-        <div className="flex items-center gap-4">
-          <Settings size={20} className="text-gray-400 cursor-pointer" /></div>
-      </div>
-      {/* ອໍເດີ */}
-      <div className=" flex w-70 h-auto items-center flex-col ">
-        <div className="flex  items-center bg-yellow-200 w-full h-20 text-white p-3 flex-col">
-            <h2 className="font-bold text-lg text-gray-800">Table 07</h2>
-            <p className="text-sm text-gray-500">Order #4</p>
-        </div>
-        <div className="flex bg-[#ffffff] h-80 w-full flex-col p-4 ">
-  <div className="flex gap-3 mt-auto">
-    <button className="flex-1 bg-[#f00534e6] text-white py-2 rounded-xl font-bold text-sm hover:opacity-90">Start</button>
-    <button className="flex-1 bg-[#09ec51] text-white py-2 rounded-xl font-bold text-sm hover:opacity-90">Finish </button>
-    </div>
-    </div>
+    <div className="min-h-screen bg-slate-900 p-6 font-lao text-white">
+      <div className="max-w-7xl mx-auto">
+        <header className="flex justify-between items-center mb-10">
+          <h1 className="text-3xl font-black text-orange-500 tracking-tight">KITCHEN ຫ້ອງຄົວ</h1>
+          <div className="bg-slate-800 px-4 py-2 rounded-full text-sm border border-slate-700">
+            ອໍເດີທັງໝົດ: <span className="text-orange-500 font-bold">{orders.length}</span>
+          </div>
+        </header>
 
+        {orders.length === 0 ? (
+          <div className="text-center py-20 opacity-20">
+            <Utensils size={80} className="mx-auto mb-4" />
+            <p className="text-2xl italic">ຍັງບໍ່ມີອໍເດີທີ່ຕ້ອງປຸງແຕ່ງ</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {orders.map((order) => (
+              <div key={order.order_id} className={`bg-slate-800 rounded-3xl border-2 overflow-hidden flex flex-col ${order.order_status === 'cooking' ? 'border-orange-500' : 'border-slate-700'}`}>
+                {/* Header ຂອງ Card */}
+                <div className={`p-4 flex justify-between items-center ${order.order_status === 'cooking' ? 'bg-orange-500 text-slate-900' : 'bg-slate-700'}`}>
+                  <span className="font-black text-lg">ID: #{order.order_id.toString().slice(-4)}</span>
+                  <div className="flex items-center gap-1 text-xs opacity-80">
+                    <Clock size={14} />
+                    {new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+
+                {/* ລາຍການອາຫານ */}
+                <div className="p-5 flex-1">
+                  <ul className="space-y-4">
+                    {order.Order_Details?.map((item, idx) => (
+                      <li key={idx} className="flex gap-3">
+                        <span className="bg-slate-700 text-orange-400 px-2 py-1 rounded-lg font-bold h-fit text-sm">
+                          {item.quantity}x
+                        </span>
+                        <div>
+                          <p className="font-bold text-lg leading-tight">{item.Menus?.laoName || item.Menus?.menu_name}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* ປຸ່ມຈັດການສະຖານະ */}
+                <div className="p-4 bg-slate-900/40 border-t border-slate-700">
+                    <button 
+                      onClick={() => updateOrderStatus(order.order_id,order.order_status)}
+                      className={cn(
+                         "w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all",
+                         order.order_status === "pending" && "bg-blue-600 hover:bg-blue-700 text-white", 
+                         order.order_status === "cooking" && "bg-orange-500 hover:bg-orange-600 text-white", 
+                         order.order_status === "ready" && "bg-green-500 hover:bg-green-600 text-white"
+                     )}
+                      >                                                   
+                    {order.order_status === "pending" && <><Play size={18} /> ເລີ່ມເຮັດອໍເດີ</>}
+                   {order.order_status === "cooking" && <><Timer size={18} /> ກຳລັງປຸງ...</>}
+                   {order.order_status === "ready" && <><CheckCircle size={18} /> ພ້ອມເສີບ</>}
+                   </button>                              
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

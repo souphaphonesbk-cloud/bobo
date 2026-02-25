@@ -1,5 +1,6 @@
 "use client";
-import { useState } from 'react';
+import { useState,useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { 
   LayoutDashboard, UtensilsCrossed, Table2, History,X,
@@ -7,19 +8,67 @@ import {
 } from 'lucide-react';
 
 export default function OrdersPage() {
-  // ສ້າງ State ສຳລັບສະຫຼັບ Tab
-  const [currentTab, setCurrentTab] = useState('active'); // 'active' ຫຼື 'history'
+  const [currentTab, setCurrentTab] = useState('active');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const activeOrders = [
-    { id: '01', table: 'T-1', items: 'ຕຳໝາກຫຸ່ງ, ປີ້ງໄກ່', total: '85,000', status: 'pending', time: '10:30' },
-    { id: '02', table: 'T-3', items: 'ເບຍລາວ, ຖົ່ວຂົ້ວ', total: '45,000', status: 'preparing', time: '10:45' },
-  ]
+  const fetchKitchenOrders = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('Orders')
+      .select(`
+        order_id,
+        order_status,
+        order_date,
+        total_amount,
+        Order_Details!order_id (  
+          quantity,
+          Menus ( menu_name, laoName )
+        )
+      `)
+      .in('order_status', ['pending', 'cooking','ready'])
+      .order('order_date', { ascending: true });
 
-  const historyOrders = [
-    { id: 'ORD-000', table: 'T-2', items: 'ແກງໜໍ່ໄມ້', total: '35,000', status: 'completed', date: '12/02/2024' },
-    { id: 'ORD-999', table: 'T-4', items: 'ຕຳມີ້', total: '25,000', status: 'completed', date: '12/02/2024' },
-  ];
+    if (error) throw error;
+    console.log(data)
+    setOrders(data || []);
+  } catch (err) {
+    console.error("Fetch Error:", err.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+useEffect(() => {
+    fetchKitchenOrders();
+
+    const channel = supabase
+      .channel('kitchen_realtime')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'Orders' }, 
+        () => fetchKitchenOrders()
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, []);
+
+   // 3. ຟັງຊັນປ່ຽນສະຖານະອໍເດີ (Update Status)
+  const handleUpdateStatus = async (id, nextStatus) => {
+    const { error } = await supabase
+      .from('Orders')
+      .update({ order_status: nextStatus })
+      .eq('order_id', id);
+    
+    if (!error) fetchKitchenOrders();
+  };
+
+  const activeOrders = orders.filter(o=>['pending','cooking','ready'] .includes(o.order_status));
+  const historyOrders = orders.filter(o=> o.order_status === 'compelte');
+
+
+  
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-lao text-slate-800">
@@ -32,11 +81,11 @@ export default function OrdersPage() {
           {/* ສ່ວນ Tab ສຳລັບສະຫຼັບໜ້າ */}
           <div className="flex gap-4 mt-6 border-b border-gray-200">
             <button 
-              onClick={() => setCurrentTab('active')}
-              className={`pb-4 px-2 text-sm font-bold transition-all ${currentTab === 'active' ? 'border-b-2 border-orange-500 text-orange-600' : 'text-gray-400'}`}
+           onClick={() => setCurrentTab('active')}
+             className={`pb-4 px-2 text-sm font-bold transition-all ${currentTab === 'active' ? 'border-b-2 border-orange-500 text-orange-600' : 'text-gray-400'}`}
             >
-              ອໍເດີທີ່ກຳລັງດຳເນີນ
-            </button>
+                ອໍເດີທີ່ກຳລັງດຳເນີນ ({activeOrders.length})
+             </button>
             <button 
               onClick={() => setCurrentTab('history')}
               className={`pb-4 px-2 text-sm font-bold transition-all ${currentTab === 'history' ? 'border-b-2 border-orange-500 text-orange-600' : 'text-gray-400'}`}
@@ -58,29 +107,37 @@ export default function OrdersPage() {
                 <th className="p-5 text-sm font-bold text-gray-400">ຍອດລວມ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
-              {(currentTab === 'active' ? activeOrders : historyOrders).map((order) => (
-                <tr key={order.id} onClick={() => setSelectedOrder(order)} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="p-5">
-                    <div className="font-bold text-sm">{order.id}</div>
-                    <div className="text-xs text-orange-500 font-bold">ໂຕະ {order.table}</div>
-                  </td>
-                  <td className="p-5 text-sm text-gray-600">{order.items}</td>
-                  <td className="p-5 text-sm text-gray-400">
-                    <div className="flex items-center gap-1">
-                      {currentTab === 'active' ? <Clock size={14}/> : <Calendar size={14}/>}
-                      {currentTab === 'active' ? order.time : order.date}
-                    </div>
-                  </td>
-                  <td className="p-5">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${order.status === 'completed' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="p-5 font-bold text-slate-700">{order.total} KIP</td>
-                </tr>
-              ))}
-            </tbody>
+           <tbody className="divide-y divide-gray-50">
+  {(currentTab === 'active' ? activeOrders : historyOrders).map((order) => (
+    <tr key={order.order_id} onClick={() => setSelectedOrder(order)} className="hover:bg-gray-50/50 cursor-pointer transition-colors">
+      <td className="p-5">
+        <div className="font-bold text-sm">#{order.order_id.toString().slice(-4)}</div>
+        <div className="text-xs text-orange-500 font-bold">ໂຕະ {order.table_id || 'N/A'}</div>
+      </td>
+      <td className="p-5 text-sm text-gray-600">
+        {/* แสดงชื่ออาหารรายการแรก และบอกว่ามีอีกกี่อย่าง */}
+        {order.Order_Details?.[0]?.Menus?.laoName} 
+        {order.Order_Details?.length > 1 && ` ແລະ ອີກ ${order.Order_Details.length - 1} ຢ່າງ`}
+      </td>
+      <td className="p-5 text-sm text-gray-400">
+        <div className="flex items-center gap-1">
+          {currentTab === 'active' ? <Clock size={14}/> : <Calendar size={14}/>}
+          {new Date(order.order_date).toLocaleTimeString('lo-LA')}
+        </div>
+      </td>
+      <td className="p-5">
+        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase 
+          ${order.order_status === 'completed' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
+          {order.order_status}
+        </span>
+      </td>
+      <td className="p-5 font-bold text-slate-700">
+        {/* ใส่ราคารวม (ถ้ามี column total_price ใน DB) */}
+        {Number(order.total_amount || 0).toLocaleString()} KIP
+      </td>
+    </tr>
+  ))}
+</tbody>
           </table>
           {/* ຖ້າບໍ່ມີຂໍ້ມູນ */}
           {(currentTab === 'active' ? activeOrders : historyOrders).length === 0 && (
@@ -134,7 +191,7 @@ export default function OrdersPage() {
             <div className="border-t border-gray-100 pt-6 mt-6">
               <div className="flex justify-between items-center mb-6">
                 <span className="text-gray-400 font-bold">ຍອດລວມທັງໝົດ</span>
-                <span className="text-2xl font-black text-orange-600">{selectedOrder.total} KIP</span>
+                <span className="text-2xl font-black text-orange-600">{selectedOrder.total_amount} KIP</span>
               </div>
             </div>
             

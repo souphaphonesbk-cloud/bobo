@@ -1,14 +1,40 @@
 "use client";
 import Link from 'next/link';
-import { useState } from 'react';
+import {useState,useEffect} from "react";
+import {supabase} from '../../lib/supabase'
 
 export default function MyOrderPage() {
-  const [cartItems, setCartItems] = useState([
-    { id: 1, name: "Beef noodle soup",laoName: "ເຝີເນື້ອ", price: 80000, qty: 1, img: "/icon/beef-noodle-soup.jpg" },
-    { id: 2, name: "Phut tai",laoName: "ຜັດໄທ", price: 79000, qty: 2, img: "/icon/ผัดไทย.png" },
-    { id: 3, name: "tom yum koung",laoName: "ຕົ້ມຍຳກຸ້ງ", price: 110000, qty: 1, img: "/icon/ต้มยำกุ้ง.png" },
-    { id: 4, name: "Stir fried spyicy frog",laoName: "ຜັດເຜັດກົບ", price: 80000,qty: 1, img: "/icon/ผัดเผัดกบ(1).png"},
-  ]);
+  const [cartItems, setCartItems] =useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isOrdered, setIsOrdered] = useState(false);
+  const [mounted, setMounted] =useState(false);
+
+     useEffect(() => {
+     setMounted(true);
+      }, []);
+
+  useEffect(() => {
+    async function fetchCartData() {
+      // 1. ດຶງຂໍ້ມູນ ID ທີ່ Save ໄວ້ໃນ localStorage
+      const savedCart = JSON.parse(localStorage.getItem("puckluck_cart") || "{}");
+      const menuIds = Object.keys(savedCart);
+
+      if (menuIds.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        
+    // 2. ດຶງຂໍ້ມູນລາຍລະອຽດອາຫານຈາກ Supabase ໂດຍໃຊ້ ID ທີ່ມີໃນ Cart
+        const { data, error } = await supabase
+          .from("Menus")
+          .select("*")
+          .in("menu_id", menuIds); // ດຶງສະເພາະ ID ທີ່ເຮົາເລືອກ
+
+        if (error) throw error;
+
+        if (data) {
 
   // ฟังก์ชันเพิ่ม/ลดจำนวน (เพื่อให้ Subtotal เปลี่ยนตาม)
   const updateQty = (id, delta) => {
@@ -17,14 +43,94 @@ export default function MyOrderPage() {
     ));
   };
 
-  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  // 3. ເອົາຂໍ້ມູນຈາກ DB ມາລວມກັບ "ຈຳນວນ (qty)" ທີ່ຢູ່ໃນ localStorage
+          const formattedData = data.map(item => ({
+            id: item.menu_id,
+            name: item.menu_name,
+            laoName: item.laoName,
+            price: item.price,
+            img: item.image,
+            qty: savedCart[item.menu_id] || 0
+          }));
+          
+          setCartItems(formattedData.filter(item => item.qty > 0));
+        }
+      } catch (error) {
+        console.error("Error loading cart:", error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
 
-   const [isOrdered, setIsOrdered] = useState(false); // สถานะว่าสั่งซื้อสำเร็จหรือยัง
-   const handleConfirmOrder = () => {
-    // ตรงนี้ใส่ Logic การส่งข้อมูลไปหลังบ้าน (ถ้ามี)
-    setIsOrdered(true); // เปลี่ยนสถานะเป็นสั่งซื้อแล้ว
-    // (Option) อาจจะโชว์ Alert หรือ Notification ว่า "ส่งรายการอาหารแล้ว"
-   };
+    fetchCartData();
+  }, []);
+
+  // ຟັງຊັນປັບຈຳນວນໃນໜ້ານີ້ ແລະ Update localStorage ໄປພ້ອມ
+  const updateQty = (id, delta) => {
+    const newItems = cartItems.map(item => {
+      if (item.id === id) {
+        const newQty = Math.max(0, item.qty + delta);
+        return { ...item, qty: newQty };
+      }
+      return item;
+    }).filter(item => item.qty > 0);
+
+    setCartItems(newItems);
+
+    // Update localStorage ໃຫ້ກົງກັນ
+    const updatedCart = {};
+    newItems.forEach(item => {
+      updatedCart[item.id] = item.qty;
+    });
+    localStorage.setItem("puckluck_cart", JSON.stringify(updatedCart));
+  };
+
+  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+const handleConfirmOrder = async () => {
+    try {
+      // 1. ບັນທຶກລົງຕາຕະລາງ Orders ຫຼັກ
+      const { data: order, error: orderError } = await supabase
+        .from('Orders')
+        .insert([
+          { 
+            table_id: 12, // ອ້າງອີງ ID ຈາກຕາຕະລາງ Tables
+            total_amount: subtotal,
+            order_status: 'pending',
+            payment_status: 'unpaid'
+          }
+        ])
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      // 2. ກຽມຂໍ້ມູນສຳລັບ Order_Details ໂດຍໃຊ້ order_id ທີ່ໄດ້ມາໃໝ່
+      const orderDetails = cartItems.map(item => ({
+        order_id: order.order_id, 
+        menu_id: item.id,
+        quantity: item.qty,
+        subtotal: item.price * item.qty 
+      }));
+
+      // 3. ບັນທຶກລົງຕາຕະລາງ Order_Details
+      const { error: detailError } = await supabase
+        .from('Order_Details')
+        .insert(orderDetails);
+
+      if (detailError) throw detailError;
+
+      // 4. ຖ້າສຳເລັດທັງໝົດ
+      setIsOrdered(true);
+      localStorage.removeItem("puckluck_cart");
+      alert("ສົ່ງອໍເດີສຳເລັດ!");
+
+    } catch (error) {
+      console.error("Error confirming order:", error.message);
+      alert("ເກີດຂໍ້ຜິດພາດ: " + error.message);
+    }
+  };
+
+
   return (
     <div className="bg-gray-50 min-h-screen pb-10 w-full flex flex-col ">
       <div className=" bg-white min-h-screen flex  flex-col shadow-lg relative">
@@ -46,9 +152,17 @@ export default function MyOrderPage() {
                <h2 className="text-2xl font-black text-gray-800">ໂຕະທີ #12</h2>
                 </div>
              <div className="text-right">
-            <p className="text-gray-400 text-[10px]">{new Date().toLocaleDateString('lo-LA')}</p>
-             <p className="text-gray-800 font-medium text-xs">ເວລາ: {new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}</p>
-          </div>
+  {mounted && (
+    <>
+      <p className="text-gray-400 text-[10px]">
+        {new Date().toLocaleDateString('lo-LA')}
+      </p>
+      <p className="text-gray-800 font-medium text-xs">
+        ເວລາ: {new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+      </p>
+    </>
+  )}
+</div>
          </div>
         {/* Item List */}
        <div className="flex-1 px-6 space-y-4 overflow-y-auto">

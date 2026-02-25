@@ -136,6 +136,8 @@ export default function CounterPage() {
       ]);
 
       if (menudata) {
+        alert("บันทึกข้อมูลสำเร็จ!");
+        
         setfromData({
           name: "",
           laoName: "",
@@ -146,11 +148,8 @@ export default function CounterPage() {
         await refreshMenus();
       }
       console.log(menudata);
-    }
-
-    
+    } 
   };
-
 
   const refreshMenus = async () => {
     const menuList = await fetchData("Menus");
@@ -162,12 +161,12 @@ export default function CounterPage() {
   React.useEffect(() => {
     refreshMenus();
     getdata();
-  }, [refreshMenus]);
+  }, []);
 
   const filteredFoods =
     selectedCategory === "All" || selectedCategory === "Recommend"
       ? foods
-      : foods.filter((food) => food.category === selectedCategory);
+      : foods.filter((food) =>Number( food.category_id) === Number(selectedCategory));
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-lao text-slate-800">
