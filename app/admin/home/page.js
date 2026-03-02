@@ -10,21 +10,8 @@ export default function DashboardPage() {
   const [selectedTable, setSelectedTable] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ຢູ່ໜ້າຫຼັກທີ່ລູກຄ້າເຫັນລາຍການອາຫານທັງໝົດ
-const searchParams = useSearchParams();
 
-useEffect(() => {
-  const table = searchParams.get('table');
-  const id = searchParams.get('id');
-
-  if (table && id) {
-    // ເກັບຄ່າລົງໃນເຄື່ອງລູກຄ້າ
-    localStorage.setItem("puckluck_table_number", table);
-    localStorage.setItem("puckluck_table_id", id);
-  }
-}, [searchParams]);
-
-  // 1. ຟັງຊັນດຶງຂໍ້ມູນໂຕະທັງໝົດ
+   // 1. ຟັງຊັນດຶງຂໍ້ມູນໂຕະທັງໝົດ
   const fetchTables = async () => {
     const { data, error } = await supabase
       .from('Tables')
@@ -113,6 +100,9 @@ useEffect(() => {
          value={`https://bobo-jade.vercel.app?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
          size={180} 
          />
+         <label>
+          {`http://localhost:3000?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`}
+         </label>
             </div>
           </div>
           <button className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition-all">

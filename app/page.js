@@ -1,42 +1,22 @@
 "use client";
 import Link from "next/link";
-import {useState,useEffect,Suspense} from "react";
-import { useSearchParams } from 'next/navigation';
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
- function TableSessionManager() {
-  const searchParams = useSearchParams();
-
-  useEffect(() => {
-    const table = searchParams.get('table');
-    const id = searchParams.get('id');
-    const token = searchParams.get('token');
-
-    if (table && id) {
-      localStorage.setItem("puckluck_table_number", table);
-      localStorage.setItem("puckluck_table_id", id);
-      if (token) localStorage.setItem("puckluck_table_token", token);
-      console.log("ບັນທຶກຂໍ້ມູນໂຕະແລ້ວ:", table);
-    }
-  }, [searchParams]);
-
-  return null; // Component ນີ້ເຮັດວຽກເບື້ອງຫຼັງ ບໍ່ຕ້ອງໂຊ UI
-}
- 
 
 export default function Page() {
   const [selectedCategory, setSelectedCategory] = useState("Recommend");
   const [categories, setCategories] = useState([]);
   const [myFoods, setMyFoods] = useState([]);
-  const [cart, setCart] =useState({});
+  const [cart, setCart] = useState({});
+  const searchParams = useSearchParams();
 
- 
-  
   const updateQty = (id, delta) => {
     setCart((prev) => {
       const currentQty = prev[id] || 0;
       const newQty = Math.max(0, currentQty + delta);
-      
+
       // ສ້າງ Object ໃໝ່ເພື່ອບໍ່ໃຫ້ກະທົບກັບ State ເກົ່າໂດຍກົງ
       const newCart = { ...prev, [id]: newQty };
 
@@ -49,29 +29,43 @@ export default function Page() {
       if (typeof window !== "undefined") {
         localStorage.setItem("puckluck_cart", JSON.stringify(newCart));
       }
-      
+
       return newCart;
     });
   };
 
-// ເພີ່ມ useEffect ນີ້ເຂົ້າໄປໃນ Page Component
-useEffect(() => {
-  const savedCart = localStorage.getItem("puckluck_cart");
-  if (savedCart) {
-    setCart(JSON.parse(savedCart));
-  }
-}, []);
+  // const getLocalstorage = () => {
+  //   const savedCart = localStorage.getItem("puckluck_cart");
+  //   if (savedCart) {
+  //     setCart(JSON.parse(savedCart));
+  //   }
+  // };
 
-   useEffect(() => {
-    async function fetchData() {
+  const checkParam = () => {
+    const table = searchParams.get("table");
+    const id = searchParams.get("id");
+    const token = searchParams.get("token");
+
+    if (table && id) {
+      // ເກັບຂໍ້ມູນໄວ້ໃນ LocalStorage ເພື່ອໃຊ້ໃນທຸກໆໜ້າ
+      localStorage.setItem("puckluck_table_number", table); // table name
+      localStorage.setItem("puckluck_table_id", id); // table id ref in database
+      if (token) localStorage.setItem("puckluck_table_token", token);
+
+      console.log("ບັນທຶກຂໍ້ມູນໂຕະແລ້ວ:", table);
+    }
+  };
+
+
+  async function fetchData() {
       const { data: catData, error: catError } = await supabase
         .from("Categories")
         .select("*");
       if (catError) throw catError; // ຖ້າມີ error ໃຫ້ໂດດໄປຫາ catch ເລີຍ
-        if (catData) {
-          setCategories(catData);
-          console.log("Categories:", catData);
-        }
+      if (catData) {
+        setCategories(catData);
+        console.log("Categories:", catData);
+      }
 
       const { data: menuData, error: menuError } = await supabase
         .from("Menus")
@@ -80,8 +74,14 @@ useEffect(() => {
       console.log(menuData);
       if (menuError) console.error("Error Menus:", menuError.message);
     }
-    fetchData()
-  }, []); 
+
+
+
+
+  useEffect(() => {
+    checkParam();
+    fetchData();
+  }, [searchParams]);
 
   return (
     <div className="w-full bg-white min-h-screen">
@@ -94,7 +94,9 @@ useEffect(() => {
           />
           <div className="absolute inset-0 bg-black/40"></div>
           <div className="relative z-10 px-5 mt-10 text-white">
-            <h1 className="font-bold text-2xl drop-shadow-lg">Puckluck Restaurant</h1>
+            <h1 className="font-bold text-2xl drop-shadow-lg">
+              Puckluck Restaurant
+            </h1>
             <div className="flex items-center mt-2 gap-3">
               <img className="h-15 w-15 rounded-full" src="/icon/logo.jpg" />
               <span className="font-semibold text-sm drop-shadow-md ">
@@ -120,27 +122,24 @@ useEffect(() => {
               }`}
             >
               {cat.category_name}
-
             </button>
-
           ))}
-
         </div>
         {/* Food List */}
         <div className="flex flex-col gap-2 px-5 mt-8 pb-10">
           {myFoods
-            .filter(
-              (food) => {
-               if (selectedCategory === "Recommend") return true;
-                   return food.category?.category_name === selectedCategory;
-                  } )
+            .filter((food) => {
+              if (selectedCategory === "Recommend") return true;
+              return food.category?.category_name === selectedCategory;
+            })
             .map((food) => (
               <div
                 key={food.menu_id}
                 className="flex items-center bg-white rounded-3xl p-3 shadow-md border border-gray-50 gap-3"
               >
                 <div className="w-24 h-24 rounded-full overflow-hidden flex-shrink-0 bg-gray-100">
-                  <img className="w-full h-full object-cover scale-120"
+                  <img
+                    className="w-full h-full object-cover scale-120"
                     src={food.image}
                     alt="food"
                   />
@@ -155,8 +154,8 @@ useEffect(() => {
                         {food.laoName}
                       </span>
                     </div>
-            
-                 <div className="flex items-center gap-3 bg-gray-50 px-2 py-1 rounded-xl shadow-inner">
+
+                    <div className="flex items-center gap-3 bg-gray-50 px-2 py-1 rounded-xl shadow-inner">
                       <button
                         onClick={() => updateQty(food.menu_id, -1)}
                         className="text-yellow-500 font-bold w-6 h-6 flex items-center justify-center hover:scale-125 transition-all"
@@ -173,7 +172,6 @@ useEffect(() => {
                         +
                       </button>
                     </div>
-                  
                   </div>
                   <span className="text-yellow-500 font-bold mt-1 text-xl">
                     {food.price.toLocaleString()} kip
@@ -187,9 +185,11 @@ useEffect(() => {
           <div className="fixed bottom-8 right-6 z-50">
             <button className="flex items-center bg-yellow-400 p-1.5 pl-4 rounded-full shadow-lg hover:bg-yellow-500 transition-colors border-0">
               <div className="mr-3">
-                <img src="/icon/paper-bag.svg"
-                   className="w-6 h-6"
-                  alt="cart-icon" />
+                <img
+                  src="/icon/paper-bag.svg"
+                  className="w-6 h-6"
+                  alt="cart-icon"
+                />
               </div>
             </button>
           </div>
@@ -198,5 +198,3 @@ useEffect(() => {
     </div>
   );
 }
-
- 
