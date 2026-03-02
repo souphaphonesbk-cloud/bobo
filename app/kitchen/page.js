@@ -20,6 +20,7 @@ export default function KitchenPage() {
         order_id,
         order_status,
         order_date,
+        table_id,
         Order_Details!order_id (  
           quantity,
           Menus ( menu_name, laoName )
@@ -114,7 +115,7 @@ export default function KitchenPage() {
               <div key={order.order_id} className={`bg-slate-800 rounded-3xl border-2 overflow-hidden flex flex-col ${order.order_status === 'cooking' ? 'border-orange-500' : 'border-slate-700'}`}>
                 {/* Header ຂອງ Card */}
                 <div className={`p-4 flex justify-between items-center ${order.order_status === 'cooking' ? 'bg-orange-500 text-slate-900' : 'bg-slate-700'}`}>
-                  <span className="font-black text-lg">ID: #{order.order_id.toString().slice(-4)}</span>
+                  <span className="font-black text-lg">ເລກໂຕະ {order?.table_id || '..'}</span>
                   <div className="flex items-center gap-1 text-xs opacity-80">
                     <Clock size={14} />
                     {new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}

@@ -2,12 +2,16 @@
 import Link from 'next/link';
 import {useState,useEffect} from "react";
 import {supabase} from '../../lib/supabase'
+import { useSearchParams } from 'next/navigation';
 
 export default function MyOrderPage() {
   const [cartItems, setCartItems] =useState([]);
   const [loading, setLoading] = useState(true);
   const [isOrdered, setIsOrdered] = useState(false);
   const [mounted, setMounted] =useState(false);
+  const searchParams = useSearchParams();
+  const tableNumber = searchParams.get('table') || "??"; 
+  const tableId = searchParams.get('id');
 
      useEffect(() => {
      setMounted(true);
@@ -87,13 +91,17 @@ export default function MyOrderPage() {
 
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
 const handleConfirmOrder = async () => {
+  if (!tableId) {
+    alert("ກະລຸນາສະແກນ QR Code ໃໝ່ ເພື່ອລະບຸໝາຍເລກໂຕະ");
+    return;
+  }
     try {
       // 1. ບັນທຶກລົງຕາຕະລາງ Orders ຫຼັກ
       const { data: order, error: orderError } = await supabase
         .from('Orders')
         .insert([
           { 
-            table_id: 12, // ອ້າງອີງ ID ຈາກຕາຕະລາງ Tables
+            table_id: tableId, // ອ້າງອີງ ID ຈາກຕາຕະລາງ Tables
             total_amount: subtotal,
             order_status: 'pending',
             payment_status: 'unpaid'
@@ -149,7 +157,7 @@ const handleConfirmOrder = async () => {
             <div className="px-6 mb-4 flex justify-between items-end">
             <div>
              <p className="text-gray-400 text-xs uppercase tracking-wider ">ໝາຍເລກໂຕະ</p>
-               <h2 className="text-2xl font-black text-gray-800">ໂຕະທີ #12</h2>
+               <h2 className="text-2xl font-black text-gray-800">ໂຕະທີ #{tableNumber}</h2>
                 </div>
              <div className="text-right">
   {mounted && (

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from 'react';
 import Link from 'next/link'; // ອັນນີ້ສຳຄັນສຳລັບການປ່ຽນໜ້າ
+import { supabase } from '@/lib/supabase';
 import { 
   LayoutDashboard, UtensilsCrossed, Table2, History, 
   Wallet, User, Search, Bell, Users, CheckCircle2, Timer ,BarChart3
