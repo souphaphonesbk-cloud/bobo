@@ -1,10 +1,10 @@
 "use client";
 import Link from 'next/link';
-import {useState,useEffect} from "react";
+import {useState,useEffect,Suspense} from "react";
 import {supabase} from '../../lib/supabase'
 import { useSearchParams } from 'next/navigation';
 
-export default function MyOrderPage() {
+export  function MyOrderPage() {
   const [cartItems, setCartItems] =useState([]);
   const [loading, setLoading] = useState(true);
   const [isOrdered, setIsOrdered] = useState(false);
@@ -247,5 +247,13 @@ const handleConfirmOrder = async () => {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OrderPageWithSuspense() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center">ກຳລັງໂຫລດ...</div>}>
+      <MyOrderPage />
+    </Suspense>
   );
 }

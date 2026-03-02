@@ -95,7 +95,7 @@ export default function DashboardPage() {
             {/* ສະແດງ QR Code */}
             <div className="bg-white p-2 rounded-xl shadow-sm">
          <QRCodeSVG 
-         value={`https://bobo-jade.vercel.app/my-order?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
+         value={`https://bobo-jade.vercel.app/my-oder?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
          size={180} 
          />
             </div>
