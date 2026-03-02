@@ -4,14 +4,28 @@ import {useState,useEffect,Suspense} from "react";
 import {supabase} from '../../lib/supabase'
 import { useSearchParams } from 'next/navigation';
 
-export  function MyOrderPage() {
+export function MyOrderPage() {
   const [cartItems, setCartItems] =useState([]);
   const [loading, setLoading] = useState(true);
   const [isOrdered, setIsOrdered] = useState(false);
   const [mounted, setMounted] =useState(false);
   const searchParams = useSearchParams();
   const tableNumber = searchParams.get('table') || "??"; 
-  const tableId = searchParams.get('id');
+//   const tableId = searchParams.get('id');
+const [tableInfo, setTableInfo] = useState({ number: "??", id: null });
+
+useEffect(() => {
+  // ດຶງຂໍ້ມູນຈາກ LocalStorage ທີ່ໜ້າ Menu ເກັບໄວ້ໃຫ້
+  const storedTable = localStorage.getItem("puckluck_table_number");
+  const storedId = localStorage.getItem("puckluck_table_id");
+
+  if (storedTable && storedId) {
+    setTableInfo({ number: storedTable, id: storedId });
+  } else {
+    // ຖ້າບໍ່ມີຂໍ້ມູນ (ລູກຄ້າບໍ່ໄດ້ສະແກນ QR ແຕ່ເຂົ້າມາເອງ)
+    alert("ກະລຸນາສະແກນ QR Code ທີ່ໂຕະຂອງທ່ານ");
+  }
+}, []);
 
      useEffect(() => {
      setMounted(true);
@@ -91,8 +105,9 @@ export  function MyOrderPage() {
 
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
 const handleConfirmOrder = async () => {
-  if (!tableId) {
+  if (!tableInfo.id) {
     alert("ກະລຸນາສະແກນ QR Code ໃໝ່ ເພື່ອລະບຸໝາຍເລກໂຕະ");
+    console.log("ຄ່າໂຕະທີ່ດຶງໄດ້:", tableInfo);
     return;
   }
     try {
@@ -101,7 +116,7 @@ const handleConfirmOrder = async () => {
         .from('Orders')
         .insert([
           { 
-            table_id: tableId, // ອ້າງອີງ ID ຈາກຕາຕະລາງ Tables
+            table_id: tableInfo.id, // ອ້າງອີງ ID ຈາກຕາຕະລາງ Tables
             total_amount: subtotal,
             order_status: 'pending',
             payment_status: 'unpaid'
@@ -157,7 +172,7 @@ const handleConfirmOrder = async () => {
             <div className="px-6 mb-4 flex justify-between items-end">
             <div>
              <p className="text-gray-400 text-xs uppercase tracking-wider ">ໝາຍເລກໂຕະ</p>
-               <h2 className="text-2xl font-black text-gray-800">ໂຕະທີ #{tableNumber}</h2>
+              <h2 className="text-2xl font-black text-gray-800">ໂຕະທີ #{tableInfo.number}</h2>
                 </div>
              <div className="text-right">
   {mounted && (

@@ -1,4 +1,5 @@
 "use client";
+import { useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase'; // ໃຫ້ເຊັກ Path ໃຫ້ຖືກຕາມທີ່ເຈົ້າຕັ້ງໄວ້
 import { QRCodeSVG } from 'qrcode.react';
@@ -8,6 +9,20 @@ export default function DashboardPage() {
   const [tables, setTables] = useState([]);
   const [selectedTable, setSelectedTable] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // ຢູ່ໜ້າຫຼັກທີ່ລູກຄ້າເຫັນລາຍການອາຫານທັງໝົດ
+const searchParams = useSearchParams();
+
+useEffect(() => {
+  const table = searchParams.get('table');
+  const id = searchParams.get('id');
+
+  if (table && id) {
+    // ເກັບຄ່າລົງໃນເຄື່ອງລູກຄ້າ
+    localStorage.setItem("puckluck_table_number", table);
+    localStorage.setItem("puckluck_table_id", id);
+  }
+}, [searchParams]);
 
   // 1. ຟັງຊັນດຶງຂໍ້ມູນໂຕະທັງໝົດ
   const fetchTables = async () => {
@@ -95,7 +110,7 @@ export default function DashboardPage() {
             {/* ສະແດງ QR Code */}
             <div className="bg-white p-2 rounded-xl shadow-sm">
          <QRCodeSVG 
-         value={`https://bobo-jade.vercel.app/my-oder?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
+         value={`https://bobo-jade.vercel.app?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
          size={180} 
          />
             </div>

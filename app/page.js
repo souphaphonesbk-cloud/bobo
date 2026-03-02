@@ -1,13 +1,36 @@
 "use client";
 import Link from "next/link";
-import {useState,useEffect} from "react";
+import {useState,useEffect,Suspense} from "react";
+import { useSearchParams } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
+
+ function TableSessionManager() {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const table = searchParams.get('table');
+    const id = searchParams.get('id');
+    const token = searchParams.get('token');
+
+    if (table && id) {
+      localStorage.setItem("puckluck_table_number", table);
+      localStorage.setItem("puckluck_table_id", id);
+      if (token) localStorage.setItem("puckluck_table_token", token);
+      console.log("ບັນທຶກຂໍ້ມູນໂຕະແລ້ວ:", table);
+    }
+  }, [searchParams]);
+
+  return null; // Component ນີ້ເຮັດວຽກເບື້ອງຫຼັງ ບໍ່ຕ້ອງໂຊ UI
+}
+ 
 
 export default function Page() {
   const [selectedCategory, setSelectedCategory] = useState("Recommend");
   const [categories, setCategories] = useState([]);
   const [myFoods, setMyFoods] = useState([]);
   const [cart, setCart] =useState({});
+
+ 
   
   const updateQty = (id, delta) => {
     setCart((prev) => {
