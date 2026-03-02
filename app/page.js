@@ -10,7 +10,23 @@ export default function Page() {
   const [categories, setCategories] = useState([]);
   const [myFoods, setMyFoods] = useState([]);
   const [cart, setCart] = useState({});
+
+  function TableSessionManager() {
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const table = searchParams.get('table');
+    const id = searchParams.get('id');
+    
+    if (table && id) {
+      localStorage.setItem("puckluck_table_number", table);
+      localStorage.setItem("puckluck_table_id", id);
+      console.log("✅ Saved Table:", table);
+    }
+  }, [searchParams]);
+
+  return null; // Component ນີ້ບໍ່ຕ້ອງສະແດງ UI
+}
 
   const updateQty = (id, delta) => {
     setCart((prev) => {
@@ -41,20 +57,7 @@ export default function Page() {
   //   }
   // };
 
-  const checkParam = () => {
-    const table = searchParams.get("table");
-    const id = searchParams.get("id");
-    const token = searchParams.get("token");
 
-    if (table && id) {
-      // ເກັບຂໍ້ມູນໄວ້ໃນ LocalStorage ເພື່ອໃຊ້ໃນທຸກໆໜ້າ
-      localStorage.setItem("puckluck_table_number", table); // table name
-      localStorage.setItem("puckluck_table_id", id); // table id ref in database
-      if (token) localStorage.setItem("puckluck_table_token", token);
-
-      console.log("ບັນທຶກຂໍ້ມູນໂຕະແລ້ວ:", table);
-    }
-  };
 
 
   async function fetchData() {
@@ -79,12 +82,14 @@ export default function Page() {
 
 
   useEffect(() => {
-    checkParam();
     fetchData();
-  }, [searchParams]);
+  }, []);
 
   return (
     <div className="w-full bg-white min-h-screen">
+      <Suspense fallback={<div></div>}>
+        <TableSessionManager />
+      </Suspense>
       <div className=" flex flex-col min-h-screen w-full relative">
         <div className="relative w-full h-[200px]">
           <img

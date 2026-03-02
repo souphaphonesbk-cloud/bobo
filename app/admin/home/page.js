@@ -1,5 +1,4 @@
 "use client";
-import { useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase'; // ໃຫ້ເຊັກ Path ໃຫ້ຖືກຕາມທີ່ເຈົ້າຕັ້ງໄວ້
 import { QRCodeSVG } from 'qrcode.react';
