@@ -64,16 +64,12 @@ export default function SettingsPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase ml-1">ຊື່ ແລະ ນາມສະກຸນ</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase ml-1">ຊື່ຜູ້ໃຊ້</label>
                       <input type="text" defaultValue="David Brown" className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-orange-200" />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase ml-1">ອີເມວ</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase ml-1">ລະຫັດ</label>
                       <input type="email" defaultValue="david.b@restaurant.com" className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-orange-200" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase ml-1">ເບີໂທລະສັບ</label>
-                      <input type="text" defaultValue="+856 20 5555 6666" className="w-full p-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-orange-200" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-gray-400 uppercase ml-1">ຕຳແໜ່ງ</label>
