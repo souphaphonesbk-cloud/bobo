@@ -6,42 +6,40 @@ import { supabase } from "@/lib/supabase";
 
 
 export default function Page() {
-  const [selectedCategory, setSelectedCategory] = useState("Recommend");
+  // 💡 1. ປ່ຽນຄ່າເລີ່ມຕົ້ນເປັນຄ່າຫວ່າງກ່ອນ ເພື່ອໃຫ້ມັນໄປເອົາໝວດທຳອິດຈາກຖານຂໍ້ມູນມາ Active
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [categories, setCategories] = useState([]);
   const [myFoods, setMyFoods] = useState([]);
   const [cart, setCart] = useState({});
 
   function TableSessionManager() {
-  const searchParams = useSearchParams();
+    const searchParams = useSearchParams();
 
-  useEffect(() => {
-    const table = searchParams.get('table');
-    const id = searchParams.get('id');
-    
-    if (table && id) {
-      localStorage.setItem("puckluck_table_number", table);
-      localStorage.setItem("puckluck_table_id", id);
-      console.log("✅ Saved Table:", table);
-    }
-  }, [searchParams]);
+    useEffect(() => {
+      const table = searchParams.get('table');
+      const id = searchParams.get('id');
+      
+      if (table && id) {
+        localStorage.setItem("puckluck_table_number", table);
+        localStorage.setItem("puckluck_table_id", id);
+        console.log("✅ Saved Table:", table);
+      }
+    }, [searchParams]);
 
-  return null; // Component ນີ້ບໍ່ຕ້ອງສະແດງ UI
-}
+    return null; // Component ນີ້ບໍ່ຕ້ອງສະແດງ UI
+  }
 
   const updateQty = (id, delta) => {
     setCart((prev) => {
       const currentQty = prev[id] || 0;
       const newQty = Math.max(0, currentQty + delta);
 
-      // ສ້າງ Object ໃໝ່ເພື່ອບໍ່ໃຫ້ກະທົບກັບ State ເກົ່າໂດຍກົງ
       const newCart = { ...prev, [id]: newQty };
 
-      // ຖ້າຈຳນວນເປັນ 0 ໃຫ້ລຶບ ID ນັ້ນອອກຈາກ Cart
       if (newQty === 0) {
         delete newCart[id];
       }
 
-      // Save ລົງ localStorage (ກວດສອບວ່າມີ window ກ່ອນເພື່ອປ້ອງກັນ error ໃນ server side)
       if (typeof window !== "undefined") {
         localStorage.setItem("puckluck_cart", JSON.stringify(newCart));
       }
@@ -50,36 +48,74 @@ export default function Page() {
     });
   };
 
-  // const getLocalstorage = () => {
-  //   const savedCart = localStorage.getItem("puckluck_cart");
-  //   if (savedCart) {
-  //     setCart(JSON.parse(savedCart));
-  //   }
-  // };
-
-
-
-
-  async function fetchData() {
+async function fetchData() {
+    try {
+      // 1. ດຶງຂໍ້ມູນໝວດໝູ່ອາຫານທັງໝົດ
       const { data: catData, error: catError } = await supabase
         .from("Categories")
         .select("*");
-      if (catError) throw catError; // ຖ້າມີ error ໃຫ້ໂດດໄປຫາ catch ເລີຍ
-      if (catData) {
-        setCategories(catData);
-        console.log("Categories:", catData);
+      if (catError) throw catError;
+
+      // 1.2 ດຶງຂໍ້ມູນໝວດໝູ່ເຄື່ອງດື່ມມາພ້ອມ ເພື່ອເອົາປຸ່ມໝວດເຄື່ອງດື່ມມາສະແດງນຳ
+      const { data: catDrinkData, error: catDrinkError } = await supabase
+        .from("Category_drink")
+        .select("*");
+      if (catDrinkError) throw catDrinkError;
+
+      // ລວມປຸ່ມໝວດໝູ່ທັງໝົດ (ອາຫານ + ເຄື່ອງດື່ມ) ເຂົ້າກັນເພື່ອສະແດງເປັນ Tab ປຸ່ມກົດ
+      if (catData && catDrinkData) {
+        // ແປງ Format ຂອງ Category_drink ໃຫ້ຊື່ Column ມັນຕົງກັນກັບ Categories ຫຼັກ
+        const formattedCatDrinks = catDrinkData.map(cd => ({
+          category_id: `drink_${cd.category_drink_id}`, // ໃສ່ prefix ກັນ ID ຊ້ຳກັນ
+          category_name: cd.category_drink_name
+        }));
+
+        const allCategories = catData.concat(formattedCatDrinks);
+        setCategories(allCategories);
+
+        // ຖ້າຍັງບໍ່ມີການເລືອກໝວດ, ໃຫ້ເລືອກໝວດທຳອິດທີ່ມີໃຫ້ອັດຕະໂນມັດ
+        if (allCategories.length > 0 && !selectedCategory) {
+          setSelectedCategory(allCategories[0].category_name);
+        }
       }
 
+      // 2. ດຶງຂໍ້ມູນອາຫານ (Menus)
       const { data: menuData, error: menuError } = await supabase
         .from("Menus")
-        .select("*,category:category_id(category_name)");
-      if (menuData) setMyFoods(menuData);
-      console.log(menuData);
-      if (menuError) console.error("Error Menus:", menuError.message);
+        .select("*, category:Categories!category_id(category_name)");
+      if (menuError) throw menuError;
+
+      // 3. ດຶງข้อมูลເຄື່ອງດື່ມ (Drink)
+      const { data: drinkData, error: drinkError } = await supabase
+        .from("Drink")
+        .select("*, category_drink:Category_drink!category_drink_id(category_drink_name)"); 
+      if (drinkError) throw drinkError;
+
+  
+     // 4. ແປງ Format ຂອງເຄື່ອງດື່ມ (Drink) ໃຫ້ມີໂຄງສ້າງຄືກັນກັບອາຫານ
+      const formattedDrinks = drinkData ? drinkData.map(d => ({
+        id: d.drink_id,
+        menu_id: d.drink_id, // ໃສ່ prefix ເພື່ອບໍ່ໃຫ້ ID ຊ້ຳກັບອາຫານ
+        menu_name: d.drink_name,
+        laoName: d.laoName || "",
+        price: d.price,
+        image: d.image,
+        category: {
+          category_name: d.category_drink?.category_drink_name // ດຶງຊື່ໝວດເຄື່ອງດື່ມມາໃຊ້
+        }
+      })) : [];
+
+      // 5. ເອົາຂໍ້ມູນອາຫານ (menuData) ແລະ ເຄື່ອງດື່ມ (formattedDrinks) ມາລວມກັນ
+      if (menuData) {
+        const allFoodsAndDrinks = menuData.concat(formattedDrinks);
+        setMyFoods(allFoodsAndDrinks); // ເຊັດລົງ State ດຽວກັນ
+        console.log("🚀 All Combined Data:", allFoodsAndDrinks);
+      }
+
+    } catch (error) {
+      console.error("Fetch Data Error:", error);
     }
-
-
-
+  }
 
   useEffect(() => {
     fetchData();
@@ -113,8 +149,8 @@ export default function Page() {
             </p>
           </div>
         </div>
-        {/* Menu Categories (อยู่นอกเขตพื้นที่รูปพื้นหลัง) */}
 
+        {/* Menu Categories */}
         <div className="flex gap-3 px-5 mt-6 overflow-x-auto no-scrollbar">
           {categories.map((cat) => (
             <button
@@ -130,11 +166,12 @@ export default function Page() {
             </button>
           ))}
         </div>
+
         {/* Food List */}
         <div className="flex flex-col gap-2 px-5 mt-8 pb-10">
           {myFoods
             .filter((food) => {
-              if (selectedCategory === "Recommend") return true;
+              // 💡 4. ຖ້າບໍ່ມີ Recommend ແລ້ວ ມັນຈະ Filter ຕາມໝວດໝູ່ທີ່ເລືອກໂດຍກົງ
               return food.category?.category_name === selectedCategory;
             })
             .map((food) => (
@@ -179,12 +216,13 @@ export default function Page() {
                     </div>
                   </div>
                   <span className="text-yellow-500 font-bold mt-1 text-xl">
-                    {food.price.toLocaleString()} kip
+                    {food.price ? food.price.toLocaleString() : 0} kip
                   </span>
                 </div>
               </div>
             ))}
         </div>
+
         {/* ปุ่มลอย */}
         <Link href="/my-oder/">
           <div className="fixed bottom-8 right-6 z-50">

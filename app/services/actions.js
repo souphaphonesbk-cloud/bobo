@@ -28,12 +28,17 @@ export async function insertdata(tablename, data) {
 
 //U = Edit / Update
   // แก้ไขให้รองรับชื่อ ID ของทุกตาราง
-export async function updateData(tablename, payload, condition) {
-  const { data, error } = await supabase
-    .from(tablename)
-    .update(payload)
-    .eq('menu_id',condition)
-    .select();
+export async function updateData(tableName, recordData, id, itemType) {
+  let query = supabase.from(tableName).update(recordData);
+
+  // 🎯 ເຊັກປະເພດ ຖ້າເປັນເຄື່ອງດື່ມ (drink) ໃຫ້ເຊັກດ້ວຍ drink_id, ຖ້າເປັນອາຫານໃຫ້ໃຊ້ menu_id
+  if (itemType === "drink" || tableName === "Drink") {
+    query = query.eq("drink_id", id);
+  } else {
+    query = query.eq("menu_id", id);
+  }
+
+  const { data, error } = await query.select();
 
   if (error) {
     console.error("Update Error:", error.message);

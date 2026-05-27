@@ -1,114 +1,230 @@
 "use client";
-import { useState } from 'react';
-import Link from 'next/link';
-import { 
-  LayoutDashboard, UtensilsCrossed, Table2, History, 
-  Wallet, User, BarChart3, TrendingUp, ArrowUpRight, 
-  ArrowDownRight, Calendar, Download 
-} from 'lucide-react';
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase"; 
 
 export default function ReportsPage() {
-  const [timeFrame, setTimeFrame] = useState('monthly');
+  const [reportType, setReportType] = useState("daily"); // daily, monthly, yearly
+  
+  // States ສຳລັບເກັບຄ່າຕົວເລກ
+  const [totalIncome, setTotalIncome] = useState(0);
+  const [totalExpense, setTotalExpense] = useState(0);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // ข้อมูลจำลองสำหรับรายงาน
-  const summaryStats = [
-    { label: 'ລາຍຮັບທັງຫມົດ', value: '65,000,000', change: '+15%', isUp: true },
-    { label: 'ຈຳນວນອໍເດີ', value: '1,240', change: '+8%', isUp: true },
-    { label: 'ຄ່າສະເລ່ຍຕໍ່ບິນ', value: '52,000', change: '-2%', isUp: false },
-  ];
+  useEffect(() => {
+    fetchReportData();
+  }, [reportType]);
 
-  const topMenus = [
-    { name: 'ตำหมากหุ่ง', sales: 450, revenue: '11,250,000' },
-    { name: 'ปิ้งไก่ลาด', sales: 320, revenue: '20,800,000' },
-    { name: 'เบยลาว (ใหญ่)', sales: 280, revenue: '5,600,000' },
-    { name: 'ลาบงัว', sales: 150, revenue: '7,500,000' },
-  ];
+  const fetchReportData = async () => {
+    setLoading(true);
+    try {
+      // 1. ດຶງຂໍ້ມູນລາຍຮັບຈາກຕາຕະລາງ Orders
+      let incomeQuery = supabase
+        .from("Orders")
+        .select("order_id, total_amount, order_date");
+
+      // 2. ດຶງຂໍ້ມູນລາຍຈ່າຍຈາກຕາຕະລາງ Stock_Transactions (ໃຊ້ຕົວພິມໃຫຍ່ຕາມ Supabase)
+      let expenseQuery = supabase
+        .from("Stock_Transactions")
+        .select("id, item_name, quantity, cost_price, created_at");
+
+      // ---- ສ່ວນຂອງການກອງວັນທີ (Filter) ----
+      const now = new Date();
+      
+      if (reportType === "daily") {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);        
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1); 
+        
+        incomeQuery = incomeQuery.gte("order_date", yesterday.toISOString()); 
+        expenseQuery = expenseQuery.gte("created_at", yesterday.toISOString());
+      } else if (reportType === "monthly") {
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startIso = firstDayOfMonth.toISOString();
+        
+        incomeQuery = incomeQuery.gte("order_date", startIso);
+        expenseQuery = expenseQuery.gte("created_at", startIso);
+      } else if (reportType === "yearly") {
+        const firstDayOfYear = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+        const lastDayOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+        
+        incomeQuery = incomeQuery
+          .gte("order_date", firstDayOfYear.toISOString())
+          .lte("order_date", lastDayOfYear.toISOString());
+          
+        expenseQuery = expenseQuery
+          .gte("created_at", firstDayOfYear.toISOString())
+          .lte("created_at", lastDayOfYear.toISOString());
+      }
+
+      const [incomeRes, expenseRes] = await Promise.all([incomeQuery, expenseQuery]);
+
+      if (incomeRes.error) throw incomeRes.error;
+      if (expenseRes.error) throw expenseRes.error;
+
+      // ---- ປະມວນຜົນລວມລາຍຮັບ ----
+      const incomeSum = incomeRes.data.reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
+      
+      // ---- ປະມວນຜົນລວມລາຍຈ່າຍ ----
+     const expenseSum = expenseRes.data.reduce((sum, item) => {
+        const cost = Number(item.cost_price) || 0;
+        return sum + cost;
+      }, 0);
+      // ---- ລວມຂໍ້ມູນເພື່ອສະແດງໃນຕາຕະລາງ ----
+      const formattedIncome = incomeRes.data.map(item => ({
+        id: `IN-${item.order_id}`,
+        type: "ລາຍຮັບ",
+        details: `ຄ່າອາຫານ/ເຄື່ອງດື່ມ (Order #${item.order_id})`,
+        amount: Number(item.total_amount),
+        date: item.order_date,
+        color: "text-green-600"
+      }));
+
+      const formattedExpense = expenseRes.data.map(item => ({
+        id: `EX-${item.id}`,
+        type: "ລາຍຈ່າຍ",
+        details: `ຊື້ວັດຖຸດິບ: ${item.item_name || "ບໍ່ມີຊື່"} (${item.quantity || 0} ໜ່ວຍ)`,
+        amount: Number(item.cost_price) || 0, // 🎯 ແກ້ໄຂບ່ອນນີ້: ໃຫ້ສະແດງລາຄາຕົງໆເລີຍ
+        date: item.created_at,
+        color: "text-red-600"
+      }));
+
+      const allTransactions = [...formattedIncome, ...formattedExpense].sort(
+        (a, b) => new Date(b.date) - new Date(a.date)
+      );
+
+      setTotalIncome(incomeSum);
+      setTotalExpense(expenseSum);
+      setTransactions(allTransactions);
+
+    } catch (err) {
+      console.error("Error fetching report:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatMoney = (value) => {
+    return new Intl.NumberFormat("lo-LA").format(value) + " ກີບ";
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    const d = new Date(dateString);
+    return d.toLocaleDateString("lo-LA", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const netProfit = totalIncome - totalExpense;
 
   return (
-    <div className="flex min-h-screen bg-gray-50 font-lao text-slate-800">
-
-      {/* 2. Main Content */}
-      <main className="flex-1 p-8">
-        <header className="flex justify-between items-center mb-8">
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="max-w-7xl mx-auto">
+        
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">ລາຍງານລາຍຮັບແລະວິເຄາະ</h1>
-            <p className="text-gray-400 text-sm">ຕວດສອບຍອດຂາຍແລະເມນຼຍອດນຶຍມຊອງຮ້ານ</p>
+            <h1 className="text-3xl font-bold text-gray-800">📊 ລາຍງານລາຍຮັບ - ລາຍຈ່າຍ</h1>
+            <p className="text-gray-500 mt-1">ຕິດຕາມສະຖານະທາງການເງິນຂອງຮ້ານ Puckluck</p>
           </div>
-          <button className="flex items-center gap-2 bg-white border p-2.5 px-4 rounded-xl text-sm font-bold shadow-sm hover:bg-gray-50 transition-all">
-            <Download size={18} /> Export PDF
-          </button>
-        </header>
-
-        {/* บัตรสรุปตัวเลข (Top Stats) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {summaryStats.map((stat, index) => (
-            <div key={index} className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm">
-              <p className="text-gray-400 text-sm font-medium mb-1">{stat.label}</p>
-              <div className="flex items-baseline gap-2 mb-2">
-                <h3 className="text-2xl font-black text-gray-800">{stat.value}</h3>
-                <span className="text-gray-400 text-xs">KIP</span>
-              </div>
-              <div className={`flex items-center text-xs font-bold ${stat.isUp ? 'text-green-500' : 'text-red-500'}`}>
-                {stat.isUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                {stat.change} <span className="text-gray-300 font-normal ml-1 text-[10px]">ທຽບກິບເດືອນກ່ອນ</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-12 gap-8">
-          {/* กราฟแนวโน้มยอดขาย (Simulated Area Chart) */}
-          <div className="col-span-12 lg:col-span-8 bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="font-bold text-lg flex items-center gap-2">
-                <TrendingUp size={20} className="text-orange-500" /> ສະຖິຕິລາຍໄດ້ຕໍ່ເດືອນ
-              </h3>
-              <select className="bg-gray-50 border-none text-sm font-bold p-2 rounded-lg outline-none cursor-pointer">
-                <option>ປີ 2024</option>
-                <option>ປີ 2023</option>
-              </select>
-            </div>
-            <div className="h-64 w-full bg-orange-50/30 rounded-3xl flex items-end justify-around p-6 border border-dashed border-orange-100">
-               {/* จำลองแท่งกราฟ */}
-               {[30, 45, 60, 80, 55, 90, 75, 40, 85, 100, 65, 50].map((height, i) => (
-                 <div key={i} className="group relative flex flex-col items-center">
-                    <div style={{ height: `${height}%` }} className="w-4 sm:w-8 bg-orange-400/80 rounded-t-lg group-hover:bg-orange-500 transition-all cursor-pointer shadow-sm"></div>
-                    <span className="text-[8px] text-gray-400 mt-2 font-bold">{i + 1}</span>
-                 </div>
-               ))}
-            </div>
-          </div>
-
-          {/* อันดับเมนูขายดี */}
-          <div className="col-span-12 lg:col-span-4 bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm">
-            <h3 className="font-bold text-lg mb-6 flex items-center gap-2">
-              <UtensilsCrossed size={20} className="text-orange-500" /> ເມນູຂາຍດີ
-            </h3>
-            <div className="space-y-6">
-              {topMenus.map((menu, index) => (
-                <div key={index} className="flex items-center justify-between group cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center font-black text-orange-500 border border-gray-100 group-hover:bg-orange-500 group-hover:text-white transition-all">
-                      {index + 1}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-800">{menu.name}</p>
-                      <p className="text-[10px] text-gray-400">{menu.sales} ລາຍການ</p>
-                    </div>
-                  </div>
-                  <div className="text-right text-sm font-black text-gray-700">
-                    {menu.revenue}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button className="w-full mt-8 py-3 border-2 border-dashed border-gray-100 rounded-2xl text-xs font-bold text-gray-400 hover:border-orange-200 hover:text-orange-500 transition-all">
-              ເບິ່ງເມນູທັງຫມົດ
+          
+          <div className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-xl shadow-sm border border-gray-200">
+            <button
+              onClick={() => setReportType("daily")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${reportType === "daily" ? "bg-orange-500 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+            >
+              ປະຈຳວັນ
+            </button>
+            <button
+              onClick={() => setReportType("monthly")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${reportType === "monthly" ? "bg-orange-500 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+            >
+              ປະຈຳເດືອນ
+            </button>
+            <button
+              onClick={() => setReportType("yearly")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${reportType === "yearly" ? "bg-orange-500 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+            >
+              ປະຈຳປີ
             </button>
           </div>
         </div>
 
-      </main>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-medium text-gray-500">ລາຍຮັບທັງໝົດ</span>
+              <div className="p-2.5 bg-green-50 text-green-600 rounded-xl">💰</div>
+            </div>
+            <h2 className="text-2xl font-bold text-green-600">{formatMoney(totalIncome)}</h2>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-medium text-gray-500">ລາຍຈ່າຍທັງໝົດ</span>
+              <div className="p-2.5 bg-red-50 text-red-600 rounded-xl">📉</div>
+            </div>
+            <h2 className="text-2xl font-bold text-red-600">{formatMoney(totalExpense)}</h2>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-medium text-gray-500">ກຳໄລສຸດທິ</span>
+              <div className={`p-2.5 rounded-xl ${netProfit >= 0 ? "bg-blue-50 text-blue-600" : "bg-amber-50 text-amber-600"}`}>📈</div>
+            </div>
+            <h2 className={`text-2xl font-bold ${netProfit >= 0 ? "text-blue-600" : "text-amber-600"}`}>
+              {formatMoney(netProfit)}
+            </h2>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-5 border-b border-gray-100">
+            <h3 className="text-lg font-bold text-gray-800">📝 ລາຍການເຄື່ອນໄຫວ</h3>
+          </div>
+
+          {loading ? (
+            <div className="p-12 text-center text-gray-400">ກຳລັງໂຫຼດຂໍ້ມູນລາຍງານ...</div>
+          ) : transactions.length === 0 ? (
+            <div className="p-12 text-center text-gray-400">ບໍ່ມີຂໍ້ມູນລາຍຮັບ-ລາຍຈ່າຍໃນຊ່ວງເວລານີ້</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-500 text-xs uppercase font-semibold border-b border-gray-100">
+                    <th className="p-4">ວັນທີ-ເວລາ</th>
+                    <th className="p-4">ປະເພດ</th>
+                    <th className="p-4">ລາຍລະອຽດລາຍການ</th>
+                    <th className="p-4 text-right">ຈຳນວນເງິນ</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm text-gray-600 divide-y divide-gray-50">
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 text-gray-500 whitespace-nowrap">{formatDate(tx.date)}</td>
+                      <td className="p-4 font-medium">
+                        <span className={`px-2 py-1 rounded-md text-xs font-semibold ${tx.type === "ລາຍຮັບ" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                          {tx.type}
+                        </span>
+                      </td>
+                      <td className="p-4 text-gray-700 max-w-md truncate">{tx.details}</td>
+                      <td className={`p-4 text-right font-bold ${tx.color}`}>
+                        {tx.type === "ລายຮັບ" ? "+" : "-"}{formatMoney(tx.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }

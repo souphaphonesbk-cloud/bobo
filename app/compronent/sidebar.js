@@ -24,7 +24,7 @@ import {
            { id: 'home', name: 'ໜ້າຫຼັກ', icon: <LayoutDashboard size={20} />, path: '/admin/home' },
             { id: 'orders', name: 'ລາຍການສັ່ງຊື້', icon: <History size={20} />, path: '/admin/orders', badge: 5 },
             { id: 'tables', name: 'ສະຖານະໂຕະ', icon: <Table2 size={20} />, path: '/admin/tables' },
-            { id: 'billing', name: 'ການຊຳລະເງິນ', icon: <Wallet size={20} />, path: '/admin/billing' },
+            { id: 'stock-in', name: 'ນຳເຂົ້າສິນຄ້າ', icon: <Wallet size={20} />, path: '/admin/stock-in' },
             { id: 'menu', name: 'ຈັດການເມນູ', icon: <UtensilsCrossed size={20} />, path: '/admin/menu' },
             { id: 'reports', name: 'ລາຍງານລາຍຮັບ', icon: <BarChart3 size={20} />, path: '/admin/reports' },
             { id: 'settings', name: 'ຕັ້ງຄ່າ', icon: <User size={20} />, path: '/admin/settings' },

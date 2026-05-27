@@ -1,208 +1,362 @@
 "use client";
-import { useState, useEffect,useRef} from 'react'; 
-import{useReactToPrint} from 'react-to-print';
-import { supabase } from '../../../lib/supabase';
-import Link from 'next/link'; 
-import { QRCodeSVG } from 'qrcode.react';
-import { Search, Bell, QrCode, CreditCard, UserPlus, Timer, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import { ShoppingBag, Utensils, ShoppingCart, Plus, Minus, Trash2, Loader2, CheckCircle, Image as ImageIcon, Coffee } from 'lucide-react';
 
-export default function DashboardPage() {
-  const [tables, setTables] = useState([]);
-  const [selectedTable, setSelectedTable] = useState(null);
+export default function CounterOrderPage() {
+  const [allMeals, setAllMeals] = useState([]);    
+  const [allDrinks, setAllDrinks] = useState([]);   
+  const [filteredMenus, setFilteredMenus] = useState([]); 
+  const [selectedCategory, setSelectedCategory] = useState('ອາຫານ'); 
+  
+  const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
-  const qrRef=useRef();
-   
-  const handlePrint= useReactToPrint({
-    contentRef: qrRef,
-    documentTitle: `QR_Table_${selectedTable?.table_number}`,
-  })
+  const [submitting, setSubmitting] = useState(false);
+  
+  const [orderType, setOrderType] = useState('takeaway'); 
+  const [tableId, setTableId] = useState(''); 
 
 
-   // 1. ຟັງຊັນດຶງຂໍ້ມູນໂຕະທັງໝົດ
-  const fetchTables = async () => {
-    const { data, error } = await supabase
-      .from('Tables')
-      .select('*')
-      .order('table_number', { ascending: true });
-    
-    if (!error) setTables(data);
-    setLoading(false);
+  // 1. ດຶງຂໍ້ມູນເມນູອາຫານ ແລະ ເຄື່ອງດື່ມ
+useEffect(() => {
+  const fetchData = async () => {
+    try {
+      const [mealsResponse, drinksResponse] = await Promise.all([
+        supabase
+          .from('Menus')
+          .select(`
+            *,
+            Categories (
+              category_name
+            )
+          `)
+          .order('menu_name', { ascending: true }),
+          
+        supabase
+          .from('Drink')
+          .select('*')
+          .order('drink_name', { ascending: true })
+      ]);
+
+      if (mealsResponse.error) throw mealsResponse.error;
+      if (drinksResponse.error) throw drinksResponse.error;
+
+      const formattedDrinks = (drinksResponse.data || []).map(drink => ({
+        ...drink,
+        menu_id: `drink_${drink.drink_id}`, 
+        menu_name: drink.drink_name,
+        
+        // 🎯 ວິທີແກ້: ປ່ຽນຈາກ drink.drink_name ມາເປັນ drink.laoName 
+        laoName: drink.laoName || drink.drink_name, 
+        
+        is_drink: true 
+      }));
+
+      setAllMeals(mealsResponse.data || []);
+      setAllDrinks(formattedDrinks);
+
+      // 🎯 ເພີ່ມການກວດເຊັກເງື່ອນໄຂ: ເພື່ອໃຫ້ຕອນໂຫຼດໜ້າທຳອິດ ຖ້າຢູ່ໝວດເຄື່ອງດື່ມ ໃຫ້ສະແດງຂໍ້ມູນເຄື່ອງດື່ມທັນທີ
+      if (selectedCategory === 'ເຄື່ອງດື່ມ') {
+        setFilteredMenus(formattedDrinks);
+      } else {
+        setFilteredMenus(mealsResponse.data || []);
+      }
+
+    } catch (err) {
+      console.error("Fetch data error:", err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => {
-    fetchTables();
+  fetchData();
+}, [selectedCategory]); 
 
-    // 2. ເປີດ Realtime ເພື່ອໃຫ້ມັນອັບເດດເອງເວລາຂໍ້ມູນໃນ DB ປ່ຽນ
-    const channel = supabase
-      .channel('table_db_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'Tables' }, () => {
-        fetchTables();
-      })
-      .subscribe();
-
-    return () => supabase.removeChannel(channel);
-  }, []);
-
-  // 3. ຟັງຊັນ "ເປີດໂຕະ" (Generate Token ໃໝ່)
-  const handleOpenTable = async (id) => {
-    const newToken = crypto.randomUUID(); 
-    const newStatus = 'ບໍ່ຫວ້າງ';
-
-  // --- ສ່ວນທີ່ເພີ່ມເຂົ້າມາ: ອັບເດດ State ຢູ່ໜ້າຈໍທັນທີ ---
-  // 1. ອັບເດດລາຍຊື່ໂຕະທັງໝົດໃນ State
-  setTables(prevTables => 
-    prevTables.map(t => t.table_id === id ? { ...t, status: newStatus, qr_code_token: newToken } : t)
-  );
-  
-  // 2. ອັບເດດໂຕະທີ່ກຳລັງເລືອກຢູ່ (Sidebar ຈຶ່ງຈະປ່ຽນທັນທີ)
-  setSelectedTable(prev => ({ ...prev, status: newStatus, qr_code_token: newToken }));
-    const { error } = await supabase
-
-    
-      .from('Tables')
-      .update({ 
-        status: 'ບໍ່ຫວ້າງ', 
-        qr_code_token: newToken,
-        // ຖ້າເຈົ້າເພີ່ມ last_session_at ແລ້ວໃຫ້ໃສ່ບ່ອນນີ້:
-        // last_session_at: new Date().toISOString() 
-      })
-      .eq('table_id', id);
-    
-    if (error) alert("ເກີດຂໍ້ຜິດພາດໃນການເປີດໂຕະ");
-  };
-
-  if (loading) return <div className="p-10 text-center font-lao">ກຳລັງໂຫລດຂໍ້ມູນ...</div>;
-
-  // ຟັງຊັນປິດໂຕະ
-  const handleCheckout = async (id) => {
-  const { error } = await supabase
-    .from('Tables')
-    .update({ 
-      status: 'ໂຕະຫວ້າງ', // ປ່ຽນສະຖານະກັບມາຫວ່າງ
-      qr_code_token: null   // ລ້າງ Token ເກົ່າຖິ້ມເພື່ອຄວາມປອດໄພ
-    })
-    .eq('table_id', id);
-  
-  if (error) {
-    alert("ເກີດຂໍ້ຜິດພາດໃນການປິດໂຕະ");
+  // 2. ຟັງຊັນສະຫຼັບໝວດໝູ່
+const filterMenus = (category) => {
+  setSelectedCategory(category);
+  if (category === 'ເຄື່ອງດື່ມ') {
+    setFilteredMenus(allDrinks);
   } else {
-    setSelectedTable(null); // ເຊົາເລືອກໂຕະນັ້ນໃນ Sidebar
+    setFilteredMenus(allMeals);
   }
 };
 
-  return (
-    <div className="flex min-h-screen bg-gray-50 font-lao text-slate-800">
-      <style>{`
-  @media print {
-    @page { 
-      /* กำหนดให้ความสูงเป็น auto เพื่อให้เครื่องตัดกระดาษตามเนื้อหาจริง */
-      size: 80mm auto; 
-      margin: 0; 
+  // 3. ເpreີ່ມເມນູເຂົ້າກະຕ່າ
+  const addToCart = (item) => {
+    const existingItem = cart.find(cartItem => cartItem.menu_id === item.menu_id);
+    if (existingItem) {
+      setCart(cart.map(cartItem => 
+        cartItem.menu_id === item.menu_id ? { ...cartItem, quantity: cartItem.quantity + 1 } : cartItem
+      ));
+    } else {
+      setCart([...cart, { ...item, quantity: 1 }]);
     }
-    body { 
-      margin: 0; 
-      background: white; 
-    }
-    /* บังคับให้ส่วนที่จะปริ้นมีความสูงแค่พอดีเนื้อหา */
-    .print-container { 
-      width: 80mm; 
-      height: fit-content; 
-      padding: 10px;
-      margin: 0;
-    }
-  }
-`}</style>
-      <main className="flex-1 p-8 overflow-y-auto">
-        <header className="flex justify-between items-center mb-8">
-            <h1 className="text-2xl font-black">Puckluck POS</h1>
-            {/* ... ສ່ວນ Header ອື່ນໆຄືເກົ່າ ... */}
-        </header>
+  };
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-          {tables.map(table => (
-            <div 
-              key={table.table_id} 
-              onClick={() => setSelectedTable(table)}
-              className={`p-6 rounded-[32px] border-2 transition-all cursor-pointer ${
-                selectedTable?.table_id === table.table_id ? 'border-orange-500 bg-white shadow-xl' : 
-                table.status === 'ບໍ່ຫວ້າງ' ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-transparent'
+  // 4. ປັບຫຼຸດ/ເພີ່ມຈຳນວນໃນກະຕ່າ
+  const updateQuantity = (menuId, amount) => {
+    setCart(cart.map(item => {
+      if (item.menu_id === menuId) {
+        const newQty = item.quantity + amount;
+        return newQty > 0 ? { ...item, quantity: newQty } : item;
+      }
+      return item;
+    }).filter(item => item.quantity > 0));
+  };
+
+  // 5. ลົບລາຍການອອກຈາກກະຕ່າ
+  const removeFromCart = (menuId) => {
+    setCart(cart.filter(item => item.menu_id !== menuId));
+  };
+
+  const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  // 6. ຟັງຊັນສົ່ງອໍເດີ
+  const handlePlaceOrder = async () => {
+    if (cart.length === 0) {
+      alert("ກະລຸນາເລືອກລາຍການອາຫານກ່ອນ!");
+      return;
+    }
+    if (orderType === 'eating_in' && !tableId) {
+      alert("ກະລຸນາລະບຸເລກໂຕະ!");
+      return;
+    }
+
+    let chosenPaymentMethod = null;
+    if (orderType === 'takeaway') {
+      const isCash = window.confirm("💰 ລູກຄ້າຊຳລະດ້ວຍ [ ເງິນສົດ ] ແມ່ນບໍ່?\n\n(ກົດ OK = ເງິນສົດ / ກົດ Cancel = ໂອນເງິນ OnePay)");
+      chosenPaymentMethod = isCash ? 'cash' : 'transfer';
+    }
+
+    setSubmitting(true);
+    try {
+      const formattedTableNumber = `ໂຕະ ${tableId}`;
+      let actualTableId = null;
+
+      if (orderType === 'eating_in') {
+        const { data: tableData, error: tableFetchError } = await supabase
+          .from('Tables')
+          .select('table_id')
+          .eq('table_number', formattedTableNumber)
+          .single();
+
+        if (tableFetchError || !tableData) {
+          throw new Error(`ບໍ່ພົບຂໍ້ມູນ "${formattedTableNumber}" ນີ້ໃນລະບົບ Database!`);
+        }
+        actualTableId = tableData.table_id;
+      }
+
+      const orderPayload = {
+        total_amount: totalAmount, 
+        table_id: actualTableId,
+        order_date: new Date().toISOString(),
+        order_status: 'pending', 
+        payment_status: orderType === 'eating_in' ? 'unpaid' : 'paid',
+        payment_method: chosenPaymentMethod, 
+        order_type: orderType === 'eating_in' ? 'dine_in' : 'take_away'
+      };
+
+      const { data: orderData, error: orderError } = await supabase
+        .from('Orders')
+        .insert([orderPayload])
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      const detailsPayload = cart.map((item) => {
+        if (item.is_drink) {
+          const actualDrinkId = parseInt(item.menu_id.replace('drink_', ''), 10);
+          return {
+            order_id: orderData.order_id,
+            quantity: item.quantity,
+            subtotal: item.price * item.quantity,
+            menu_id: null,        
+            drink_id: actualDrinkId 
+          };
+        } else {
+          return {
+            order_id: orderData.order_id,
+            quantity: item.quantity,
+            subtotal: item.price * item.quantity,
+            menu_id: item.menu_id, 
+            drink_id: null          
+          };
+        }
+      }); 
+
+      const { error: detailsError } = await supabase
+        .from('Order_Details')
+        .insert(detailsPayload);
+
+      if (detailsError) throw detailsError;
+
+      if (orderType === 'eating_in' && actualTableId) {
+        const { error: tableUpdateError } = await supabase
+          .from('Tables')
+          .update({ status: 'ບໍ່ຫວ້າງ' }) 
+          .eq('table_id', actualTableId);
+
+        if (tableUpdateError) {
+          console.error("ລົ້ມເຫຼວໃນການອັບເດດສະຖານະໂຕະ:", tableUpdateError.message);
+        }
+      }
+
+      if (orderType === 'takeaway') {
+        alert(`🛍️ ສັ່ງກັບບ້ານ ແລະ ເກັບເງິນສຳເລັດ!\n👉 ໝາຍເລກຄິວຂອງລູກຄ້າແມ່ນ: # ${orderData.order_id}`);
+      } else {
+        alert( 'ສັ່ງອາຫານສຳເລັດ');
+      }
+
+      setCart([]);
+      setTableId('');
+    } catch (err) {
+      console.error("Order error:", err.message);
+      alert("ເກີດຂໍ້ຜິດພາດ: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 font-lao flex flex-col md:flex-row">
+      
+      {/* ດ້ານຊ້າຍ: ສະແດງເມນູອາຫານ */}
+      <div className="flex-1 p-6 overflow-y-auto max-h-screen">
+       <header className="mb-6">
+          <div className="flex justify-between items-center mb-5">
+            <div>
+              <h1 className="text-2xl font-black text-gray-900">Counter Ordering</h1>
+              <p className="text-sm text-gray-700 font-medium">ລະບົບສັ່ງອາຫານໜ້າເຄົາເຕີ</p>
+            </div>
+            <span className="text-sm bg-white border border-gray-300 px-4 py-2 rounded-full text-gray-900 font-bold shadow-sm flex items-center gap-2">
+               {selectedCategory === 'ເຄື່ອງດື່ມ' || selectedCategory === 'เครื่องดื่ม' ? <Coffee size={16} className="text-orange-500" /> : <Utensils size={16} className="text-orange-500" />}
+               ໝວດໝູ່ <span className="font-black text-orange-600">{selectedCategory}</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 bg-white p-2 rounded-full border border-gray-200 shadow-inner w-fit">
+            <button
+              onClick={() => filterMenus('ອາຫານ')}
+              className={`px-8 py-2.5 rounded-full font-black text-sm transition-all flex items-center gap-2 ${
+                selectedCategory === 'ອາຫານ' || selectedCategory === 'ອາຫານ' ? 'bg-orange-500 text-white shadow-md' : 'bg-white text-gray-800 hover:bg-gray-100'
               }`}
             >
-              <div className="flex justify-between mb-2">
-                <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${table.status === 'ບໍ່ຫວ້າງ' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
-                  {table.status || 'ໂຕະຫວ້າງ'}
-                </span>
+              <Utensils size={16} /> ອາຫານ ({allMeals.length})
+            </button>
+            
+            <button
+              onClick={() => filterMenus('ເຄື່ອງດື່ມ')}
+              className={`px-8 py-2.5 rounded-full font-black text-sm transition-all flex items-center gap-2 ${
+                selectedCategory === 'ເຄື່ອງດື່ມ' || selectedCategory === 'ເຄື່ອງດື່ມ' ? 'bg-orange-500 text-white shadow-md' : 'bg-white text-gray-800 hover:bg-gray-100'
+              }`}
+            >
+              <Coffee size={16} /> ເຄື່ອງດື່ມ ({allDrinks.length})
+            </button>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {filteredMenus.map((item) => (
+            <div 
+              key={item.menu_id} 
+              onClick={() => addToCart(item)}
+              className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group border-b-2"
+            >
+              <div className="aspect-square w-full bg-gray-50 rounded-xl mb-3 overflow-hidden flex items-center justify-center border border-gray-200">
+                {item.image ? (
+                  <img src={item.image} alt={item.laoName || item.menu_name} className="w-full h-full object-cover" />
+                ) : (
+                  <ImageIcon size={36} className="text-gray-400" /> 
+                )}
               </div>
-              <h3 className="text-2xl font-black">{table.table_number}</h3>
+              <div>
+                <h3 className="font-black text-gray-950 line-clamp-2 text-sm md:text-base leading-snug">{item.laoName || item.menu_name}</h3> {/* 🎯 ເພີ່ມຄວາມເຂັ້ມ ແລະ ຂະໜາດ */}
+                <p className="text-xs text-orange-700 font-black mt-1.5 bg-orange-50 px-2 py-0.5 rounded-md w-fit border border-orange-100">
+                  {item.is_drink ? 'ເຄື່ອງດື່ມ' : (item.Categories?.category_name || 'ອາຫານ')}
+                </p>
+                <div className="flex justify-between items-center mt-3 pt-2 border-t border-gray-200">
+                  <span className="text-orange-600 font-black text-base md:text-lg">{parseInt(item.price).toLocaleString()} ₭</span> {/* 🎯 ປັບລາຄາໃຫ້ໃຫຍ່ຂຶ້ນ */}
+                  <span className="p-1.5 bg-orange-50 text-orange-600 rounded-lg group-hover:bg-orange-500 group-hover:text-white transition-colors border border-orange-100">
+                    <Plus size={16} />
+                  </span>
+                </div>
+              </div>
             </div>
           ))}
         </div>
-      </main>
-
-      {/* Sidebar ສະແດງ QR ແລະ ປຸ່ມຈັດການ */}
-      {/* Sidebar: ປັບໃຫ້ສະແດງຜົນໄດ້ງ່າຍຂຶ້ນ */}
-<aside className="w-80 bg-white border-l p-6 flex flex-col shadow-lg">
-  {selectedTable ? (
-    <div className="animate-in fade-in slide-in-from-right duration-300">
-      <h2 className="text-xl font-bold mb-4">ຈັດການໂຕະ {selectedTable.table_number}</h2>
-      
-      {selectedTable.status === 'ບໍ່ຫວ້າງ' ? (
-        <div className="space-y-4">
-          <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100 flex flex-col items-center">
-            <p className="text-xs font-bold text-orange-600 mb-2">QR ສັ່ງອາຫານ</p>
-           <div ref={qrRef} className="bg-white p-4 rounded-xl shadow-sm flex flex-col items-center">
-              <div className="hidden print:block text-center mb-2">
-                <h2 className="text-lg font-bold">Puckluck Restaurant</h2>
-                <p className="text-sm"> {selectedTable.table_number}</p>
-              </div>
-         <QRCodeSVG 
-         value={`https://bobo-jade.vercel.app?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
-         size={180} 
-         />
-         <p className="print:hidden text-[10px] mt-2 break-all text-gray-500 text-center max-w-[180px]">
-         {`http://localhost:3000?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`}
-         </p>
-            </div>
-          </div>
-
-          <button 
-            onClick={handlePrint} // เรียกฟังก์ชันที่เราสร้างไว้ (จาก step ก่อนหน้า)
-            className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
-          >
-            <QrCode size={20} />
-            ປຣີ້ນ QR Code
-          </button>
-          
-          <Link href={`/admin/billing?table=${selectedTable.table_number}`} className="w-full">
-  <button className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition-all">
-    ໄປໜ້າຊຳລະເງິນ ( {selectedTable.table_number} )
-  </button>
-</Link>
-        </div>
-      ) : (
-        <div className="text-center py-10">
-          <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
-            <UserPlus size={30} />
-          </div>
-          <p className="text-gray-500 text-sm mb-6">ໂຕະນີ້ຫວ່າງຢູ່</p>
-          <button 
-            onClick={() => handleOpenTable(selectedTable.table_id)}
-            className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 shadow-md"
-          >
-            ເປີດໂຕະ / Gen QR
-          </button>
-        </div>
-      )}
-    </div>
-  ) : (
-    <div className="flex-1 flex flex-col items-center justify-center text-gray-400 opacity-50">
-      <div className="p-4 bg-gray-50 rounded-full mb-2">
-        <CreditCard size={40} />
       </div>
-      <p className="text-sm italic italic">ເລືອກໂຕະເພື່ອຈັດການ</p>
+
+      {/* ດ້ານຂວາ: ກະຕ່າ */}
+      <div className="w-full md:w-[420px] bg-white border-l border-gray-200 flex flex-col h-screen shadow-xl">
+        <div className="p-4 border-b flex items-center bg-gray-50 border-gray-200">
+          <ShoppingCart className="text-orange-500" size={24} />
+          <h2 className="font-black text-xl text-gray-900 ml-2">ລາຍການສັ່ງອາຫານ</h2>
+        </div>
+
+        <div className="p-4 space-y-3 border-b border-gray-100">
+          <div className="grid grid-cols-2 gap-2">
+            <button 
+              type="button"
+              onClick={() => { setOrderType('takeaway'); setTableId(''); }}
+              className={`p-3 rounded-xl font-black text-sm transition-all ${orderType === 'takeaway' ? 'bg-orange-500 text-white shadow-sm' : 'bg-white text-gray-800 border border-gray-300 hover:bg-gray-50'}`}
+            >
+              🛍️ ສັ່ງກັບບ້ານ
+            </button>
+            <button 
+              type="button"
+              onClick={() => setOrderType('eating_in')}
+              className={`p-3 rounded-xl font-black text-sm transition-all ${orderType === 'eating_in' ? 'bg-orange-500 text-white shadow-sm' : 'bg-white text-gray-800 border border-gray-300 hover:bg-gray-50'}`}
+            >
+              🍽️ ກິນຢູ່ຮ້ານ
+            </button>
+          </div>
+
+          {orderType === 'eating_in' && (
+            <input 
+              type="number"
+              placeholder="ລະບຸໝາຍເລກໂຕະ"
+              value={tableId}
+              onChange={(e) => setTableId(e.target.value)}
+              className="w-full p-2.5 border border-gray-400 rounded-xl text-center font-black text-2xl text-gray-950 focus:border-orange-500 focus:outline-none placeholder:text-gray-400"
+            />
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          {cart.map((item) => (
+            <div key={item.menu_id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+              <div className="flex-1 min-w-0 pr-2">
+                <h4 className="font-black text-sm text-gray-950 truncate">{item.laoName || item.menu_name}</h4> {/* 🎯 ປັບຊື່ໃນຕາຕະລາງໃຫ້ເຂັ້ມຫຼຸດການເບິ່ງຍາກ */}
+                <p className="text-xs text-orange-600 font-black mt-0.5">{(item.price * item.quantity).toLocaleString()} ₭</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => updateQuantity(item.menu_id, -1)} className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded transition-colors"><Minus size={12} /></button>
+                <span className="font-black text-sm text-gray-900 w-6 text-center">{item.quantity}</span>
+                <button onClick={() => updateQuantity(item.menu_id, 1)} className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded transition-colors"><Plus size={12} /></button>
+                <button onClick={() => removeFromCart(item.menu_id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors ml-1"><Trash2 size={16} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-4 border-t border-gray-200 bg-white space-y-4">
+          <div className="flex justify-between items-center text-gray-900 text-xl font-bold">
+            <span>ລາຄາລວມ:</span>
+            <span className="text-orange-600 font-black text-2xl">{totalAmount.toLocaleString()} ₭</span>
+          </div>
+          <button
+            disabled={submitting || cart.length === 0}
+            onClick={handlePlaceOrder}
+            className="w-full bg-gray-950 hover:bg-gray-900 text-white py-4 rounded-xl font-black flex items-center justify-center gap-2 transition-colors disabled:bg-gray-300 disabled:text-gray-500 shadow-md"
+          >
+            {submitting ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle size={20} />}
+            {submitting ? "ກຳລັງສົ່ງອໍເດີ..." : "ຢືນຢັນການສັ່ງອາຫານ"}
+          </button>
+        </div>
+
+      </div>
     </div>
-  )}
-</aside>
-    </div>
-  ); 
+  );
 }

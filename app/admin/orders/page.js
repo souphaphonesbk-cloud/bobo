@@ -3,22 +3,14 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import {
-  LayoutDashboard,
-  UtensilsCrossed,
-  Table2,
-  History,
   X,
-  Wallet,
-  User,
-  Search,
-  Bell,
-  Filter,
-  Eye,
-  CheckCircle,
   Clock,
-  Timer,
-  Calendar,
-  BarChart3,
+  CheckCircle,
+  ChefHat,
+  Package,
+  Utensils,
+  ArrowRight,
+  ShoppingBag
 } from "lucide-react";
 
 export default function OrdersPage() {
@@ -31,25 +23,30 @@ export default function OrdersPage() {
     try {
       const { data, error } = await supabase
         .from("Orders")
-        .select(
-          `
-        order_id,
-        order_status,
-        order_date,
-        total_amount,
-        table_id,
-        Order_Details!order_id (  
-          quantity,
-          Menus ( menu_name, laoName )
-        )
-      `,
-        )
-
-        .order("order_date", { ascending: true });
+        .select(`
+          order_id,
+          order_status,
+          order_date,
+          total_amount,
+          table_id,
+          order_type,
+          Order_Details!order_id (  
+            quantity,
+            subtotal,
+            Menus ( menu_name, laoName ),
+            Drink ( drink_name )
+          )
+        `)
+        .order("order_date", { ascending: false }); // 🎯 ເອົາອໍເດີໃໝ່ສຸດຂຶ້ນກ່ອນ
 
       if (error) throw error;
-      console.log(data);
       setOrders(data || []);
+      
+      // 🎯 ອັບເດດຂໍ້ມູນໃນ Modal ໃຫ້ເປັນ Realtime ຖ້າມີການປ່ຽນແປງ
+      if (selectedOrder) {
+        const updatedDetail = data.find(o => o.order_id === selectedOrder.order_id);
+        if (updatedDetail) setSelectedOrder(updatedDetail);
+      }
     } catch (err) {
       console.error("Fetch Error:", err.message);
     } finally {
@@ -65,215 +62,297 @@ export default function OrdersPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "Orders" },
-        () => fetchKitchenOrders(),
+        () => fetchKitchenOrders()
       )
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
-  }, []);
-
-  // 3. ຟັງຊັນປ່ຽນສະຖານະອໍເດີ (Update Status)
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedOrder?.order_id]); 
+  // ຟັງຊັນປ່ຽນສະຖານະອໍເດີ
   const handleUpdateStatus = async (id, nextStatus) => {
-    const { error } = await supabase
-      .from("Orders")
-      .update({ order_status: nextStatus })
-      .eq("order_id", id);
+    try {
+      const { error } = await supabase
+        .from("Orders")
+        .update({ order_status: nextStatus })
+        .eq("order_id", id);
 
-    if (!error) fetchKitchenOrders();
+      if (error) throw error;
+      await fetchKitchenOrders();
+    } catch (err) {
+      alert("ບໍ່ສາມາດອັບເດດສະຖານະໄດ້: " + err.message);
+    }
+  };
+
+  // ຟັງຊັນ Format ເວລາໃຫ້ສະແດງສະເພາະ ຊົ່ວໂມງ:ນາທີ
+  const formatTime = (dateString) => {
+    if (!dateString) return "...";
+    const date = new Date(dateString);
+    return date.toLocaleTimeString("lo-LA", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  // ຟັງຊັນ Format ວັນທີ ແລະ ເວລາ (ສຳລັບໜ້າປະຫວັດ)
+  const formatDate = (dateString) => {
+    if (!dateString) return "...";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("lo-LA", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    }) + " " + date.toLocaleTimeString("lo-LA", { hour: "2-digit", minute: "2-digit" });
   };
 
   const activeOrders = orders.filter((o) =>
-    ["pending", "cooking", "ready"].includes(o.order_status),
+    ["pending", "cooking", "ready"].includes(o.order_status)
   );
   const historyOrders = orders.filter((o) => o.order_status === "completed");
 
   return (
-    <div className="flex min-h-screen bg-gray-50 font-lao text-slate-800">
-      <main className="flex-1 p-8">
-        <header className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-800">ການຈັດການອໍເດີ</h1>
+    <div className="flex min-h-screen bg-gray-100 font-lao text-slate-900">
+      <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
+        <header className="mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-black text-gray-950">ການຈັດການອໍເດີໃນຄົວ</h1>
+              <p className="text-sm text-gray-600 font-medium mt-1">ຕິດຕາມ ແລະ ປັບປຸງສະຖານະອາຫານອໍເດີໜ້າເຄົາເຕີ ແລະ QR Code</p>
+            </div>
+          </div>
 
           {/* ສ່ວນ Tab ສຳລັບສະຫຼັບໜ້າ */}
-          <div className="flex gap-4 mt-6 border-b border-gray-200">
+          <div className="flex gap-6 mt-6 border-b border-gray-200">
             <button
               onClick={() => setCurrentTab("active")}
-              className={`pb-4 px-2 text-sm font-bold transition-all ${currentTab === "active" ? "border-b-2 border-orange-500 text-orange-600" : "text-gray-400"}`}
+              className={`pb-3 px-2 text-base font-black transition-all relative ${
+                currentTab === "active" ? "text-orange-600" : "text-gray-500 hover:text-gray-800"
+              }`}
             >
-              ອໍເດີທີ່ກຳລັງດຳເນີນ ({activeOrders.length})
+              ອໍເດີທີ່ກຳລັງດຳເນີນ
+              <span className="ml-2 bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full font-black">
+                {activeOrders.length}
+              </span>
+              {currentTab === "active" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500 rounded-full" />
+              )}
             </button>
             <button
               onClick={() => setCurrentTab("history")}
-              className={`pb-4 px-2 text-sm font-bold transition-all ${currentTab === "history" ? "border-b-2 border-orange-500 text-orange-600" : "text-gray-400"}`}
+              className={`pb-3 px-2 text-base font-black transition-all relative ${
+                currentTab === "history" ? "text-orange-600" : "text-gray-500 hover:text-gray-800"
+              }`}
             >
               ປະຫວັດການສັ່ງຊື້ທັງໝົດ
+              {currentTab === "history" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500 rounded-full" />
+              )}
             </button>
           </div>
         </header>
 
         {/* ສ່ວນສະແດງເນື້ອຫາຕາມ Tab */}
-        <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm  overflow-hidden">
-          <table className="w-full text-left ">
-            <thead>
-              <tr className="bg-gray-50/50 border-b border-gray-100">
-                <th className="p-5 text-sm font-bold text-gray-400"> ໂຕະ</th>
-                <th className="p-5 text-sm font-bold text-gray-400">ລາຍການ</th>
-                <th className="p-5 text-sm font-bold text-gray-400">
-                  {currentTab === "active" ? "ເວລາສັ່ງ" : "ວັນທີ"}
-                </th>
-                <th className="p-5 text-sm font-bold text-gray-400">ສະຖານະ</th>
-                <th className="p-5 text-sm font-bold text-gray-400">ຍອດລວມ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {(currentTab === "active" ? activeOrders : historyOrders).map(
-                (order) => (
+        <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="p-5 text-sm font-black text-gray-700">ໝາຍເລກ / ໂຕະ</th>
+                  <th className="p-5 text-sm font-black text-gray-700">ລາຍການອາຫານ</th>
+                  <th className="p-5 text-sm font-black text-gray-700">
+                    {currentTab === "active" ? "ເວລາສັ່ງ" : "ວັນທີ-ເວລາສັ່ງ"}
+                  </th>
+                  <th className="p-5 text-sm font-black text-gray-700 text-center">ສະຖານະ</th>
+                  <th className="p-5 text-sm font-black text-gray-700 text-right">ຍອດລວມ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {(currentTab === "active" ? activeOrders : historyOrders).map((order) => (
                   <tr
                     key={order.order_id}
                     onClick={() => setSelectedOrder(order)}
-                    className="hover:bg-gray-50/50 cursor-pointer transition-colors"
+                    className="hover:bg-orange-50/40 cursor-pointer transition-colors group"
                   >
                     <td className="p-5">
-                      <div className="text-xl text-gray-500 font-bold">
-                        ໂຕະ {order.table_id || "..."}
-                      </div>
-                    </td>
-                    <td className="p-5 text-sm text-gray-600">
-                      {/* แสดงชื่ออาหารรายการแรก และบอกว่ามีอีกกี่อย่าง */}
-                      {order.Order_Details?.[0]?.Menus?.laoName}
-                      {order.Order_Details?.length > 1 &&
-                        ` ແລະ ອີກ ${order.Order_Details.length - 1} ຢ່າງ`}
-                    </td>
-                    <td className="p-5 text-sm text-gray-400">
-                      <div className="flex flex-col gap-1">
-                        {/* ແຖວທີ 1: ເວລາ */}
-                        <div className="flex items-center gap-1 text-slate-700 font-bold">
-                          <Clock size={14} className="text-orange-500" />
-                          {currentTab === "active"
-                            ? new Date().toLocaleTimeString("lo-LA", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : order.order_date}
-                          {}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs bg-gray-100 text-gray-700 font-bold px-2 py-1 rounded">
+                          #{order.order_id}
+                        </span>
+                        <div className="text-lg text-gray-950 font-black">
+                          {order.table_id ? `ໂຕະ  ${order.table_id}` : "🛍️ ກັບບ້ານ"}
                         </div>
                       </div>
                     </td>
-                    <td className="p-5">
+                    <td className="p-5 text-sm text-gray-900 font-bold">
+                      <div className="max-w-xs truncate">
+                        {order.Order_Details?.[0]?.Menus?.laoName || order.Order_Details?.[0]?.Drink?.drink_name || "ບໍ່ມີຊື່ລາຍການ"}
+                        {order.Order_Details?.length > 1 && (
+                          <span className="text-orange-600 font-black ml-1">
+                            {` ແລະ ອີກ ${order.Order_Details.length - 1} ຢ່າງ`}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-5 text-sm text-gray-800 font-medium">
+                      <div className="flex items-center gap-1.5">
+                        <Clock size={15} className="text-gray-400" />
+                        {currentTab === "active" ? formatTime(order.order_date) : formatDate(order.order_date)}
+                      </div>
+                    </td>
+                    <td className="p-5 text-center">
                       <span
-                        className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase 
-    ${
-      order.order_status === "pending"
-        ? "bg-red-100 text-red-600"
-        : order.order_status === "cooking"
-          ? "bg-blue-100 text-blue-600"
-          : order.order_status === "ready"
-            ? "bg-green-100 text-green-600"
-            : order.order_status === "completed"
-              ? "bg-gray-100 text-gray-600"
-              : "bg-gray-100 text-gray-400"
-    }`}
+                        className={`px-3 py-1 rounded-full text-xs font-black tracking-wide ${
+                          order.order_status === "pending"
+                            ? "bg-rose-100 text-rose-700 border border-rose-200"
+                            : order.order_status === "cooking"
+                              ? "bg-amber-100 text-amber-800 border border-amber-200"
+                              : order.order_status === "ready"
+                                ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                : "bg-gray-100 text-gray-700"
+                        }`}
                       >
-                        {order.order_status}
+                        {order.order_status === "pending" && "⏳ ລໍຖ້າຄິວ"}
+                        {order.order_status === "cooking" && "🍳 ກຳລັງປຸງແຕ່ງ"}
+                        {order.order_status === "ready" && "✅ ເສີບໄດ້ເລີຍ"}
+                        {order.order_status === "completed" && "📦 ສຳເລັດແລ້ວ"}
                       </span>
                     </td>
-                    <td className="p-5 font-bold text-orange-500">
-                      {/* ใส่ราคารวม (ถ้ามี column total_price ใน DB) */}
-                      {Number(order.total_amount || 0).toLocaleString()} KIP
+                    <td className="p-5 font-black text-orange-600 text-right text-base">
+                      {Number(order.total_amount || 0).toLocaleString()} ₭
                     </td>
                   </tr>
-                ),
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           {/* ຖ້າບໍ່ມີຂໍ້ມູນ */}
-          {(currentTab === "active" ? activeOrders : historyOrders).length ===
-            0 && (
-            <div className="p-20 text-center text-gray-300 italic">
-              ບໍ່ມີຂໍ້ມູນລາຍການ...
+          {(currentTab === "active" ? activeOrders : historyOrders).length === 0 && (
+            <div className="p-20 text-center text-gray-400 font-bold italic bg-gray-50/50">
+              📥 ບໍ່ມີຂໍ້ມູນລາຍການອໍເດີໃນຊ່ວງເວລານີ້...
             </div>
           )}
         </div>
       </main>
 
-      {/* --- 3. ສ່ວນຂອງ Modal ສະແດງລາຍລະອຽດ --- */}
+      {/* --- 3. ສ່ວນຂອງ Modal ສະແດງລາຍລະອຽດ (Side Drawer) --- */}
       {selectedOrder && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex justify-center ">
-          <div className="w-full max-w-md bg-white h-full shadow-2xl p-8 flex flex-col animate-in slide-in-from-right duration-300">
-            <div className="flex justify-between items-center mb-8">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end transition-opacity">
+          <div className="w-full max-w-md bg-white h-full shadow-2xl p-6 flex flex-col animate-in slide-in-from-right duration-200">
+            
+            {/* Header Modal */}
+            <div className="flex justify-between items-center mb-6 pb-4 border-b">
               <div>
-                <h2 className="text-xl font-black flex items-center gap-2">
-                  ລາຍລະອຽດອໍເດີ
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-gray-100 px-2 py-0.5 rounded font-bold text-gray-600">
+                    ID: #{selectedOrder.order_id}
+                  </span>
+                  <span className="text-xs font-medium text-gray-500">
+                    {formatDate(selectedOrder.order_date)}
+                  </span>
+                </div>
+                <h2 className="text-2xl font-black text-gray-950 mt-1">
+                  {selectedOrder.table_id ? `ໂຕະ  ${selectedOrder.table_id}` : "🛍️ ອໍເດີກັບບ້ານ"}
                 </h2>
-                <p className="text-sm text-orange-500 font-bold">
-                  ໂຕະ {selectedOrder.table_id}
-                </p>
               </div>
               <button
                 onClick={() => setSelectedOrder(null)}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                className="p-2 hover:bg-gray-100 text-gray-500 hover:text-gray-800 rounded-full transition-colors"
               >
-                <X size={24} />
+                <X size={22} />
               </button>
             </div>
 
-            <div className="bg-orange-50 rounded-2xl p-4 mb-6 flex justify-between items-center">
+            {/* ແຖບສະແດງສະຖານະປັດຈຸບັນ */}
+            <div className={`rounded-2xl p-4 mb-6 flex justify-between items-center ${
+              selectedOrder.order_status === 'pending' ? 'bg-rose-50 border border-rose-100' :
+              selectedOrder.order_status === 'cooking' ? 'bg-amber-50 border border-amber-100' : 'bg-emerald-50 border border-emerald-100'
+            }`}>
               <div className="flex items-center gap-3">
-                <div className="bg-orange-500 text-white w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg">
-                  {selectedOrder.table}
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${
+                  selectedOrder.order_status === 'pending' ? 'bg-rose-500' :
+                  selectedOrder.order_status === 'cooking' ? 'bg-amber-500' : 'bg-emerald-500'
+                }`}>
+                  {selectedOrder.order_status === 'pending' && <Clock size={20} />}
+                  {selectedOrder.order_status === 'cooking' && <ChefHat size={20} />}
+                  {selectedOrder.order_status === 'ready' && <Utensils size={20} />}
                 </div>
-                <div className="text-sm font-black text-orange-700">
-                  ຂໍ້ມູນໂຕະ
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] text-orange-400 uppercase font-bold tracking-widest">
-                  ສະຖານະ
-                </div>
-                <div className="text-xs font-black text-orange-600 uppercase">
-                  {selectedOrder.status}
+                <div>
+                  <div className="text-xs font-bold text-gray-500">ສະຖານະອໍເດີປັດຈຸບັນ</div>
+                  <div className="text-base font-black text-gray-900">
+                    {selectedOrder.order_status === 'pending' && "ລໍຖ້າຮັບອໍເດີ"}
+                    {selectedOrder.order_status === 'cooking' && "ກຳລັງເຮັດອາຫານ"}
+                    {selectedOrder.order_status === 'ready' && "ອາຫານເຮັດສຳເລັດແລ້ວ"}
+                    {selectedOrder.order_status === 'completed' && "ເສີບ/ຮັບເຄື່ອງຮຽບຮ້ອຍ"}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
-              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">
-                ລາຍການອາຫານ
+            {/* ລາຍການອາຫານ */}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">
+                ລາຍການອາຫານທີ່ສັ່ງ ({selectedOrder.Order_Details?.length || 0})
               </h3>
-              <div className="space-y-4">
-                {/* ປ່ຽນຈາກ .detail ເປັນ .Order_Details */}
+              <div className="space-y-3">
                 {selectedOrder.Order_Details?.map((item, idx) => (
                   <div
                     key={idx}
-                    className="flex justify-between items-center border-b border-gray-50 pb-4"
+                    className="flex justify-between items-start bg-gray-50 p-3 rounded-xl border border-gray-100"
                   >
-                    <div className="flex gap-4 items-center">
-                      {/* ປ່ຽນຈາກ item.qty ເປັນ item.quantity */}
-                      <span className="bg-gray-100 text-gray-600 w-6 h-6 rounded flex items-center justify-center text-xs font-black">
-                        {item.quantity}x
+                    <div className="flex gap-3 items-center min-w-0">
+                      <span className="bg-orange-100 text-orange-700 w-7 h-7 rounded-lg flex items-center justify-center text-sm font-black shrink-0">
+                        {item.quantity}
                       </span>
-                      {/* ປ່ຽນຈາກ item.name ເປັນ item.Menus?.laoName */}
-                      <span className="font-bold text-gray-700">
-                        {item.Menus?.laoName || item.Menus?.menu_name}
+                      <span className="font-bold text-gray-950 text-sm truncate">
+                        {item.Menus?.laoName || item.Drink?.drink_name || "ບໍ່ມີຊື່ລາຍການ"}
                       </span>
                     </div>
-                    {/* ຖ້າທ່ານມີລາຄາໃນ table Order_Details ໃຫ້ໃສ່ບ່ອນນີ້ */}
-                    <span className="font-bold text-slate-600 ">
-                      {item.price
-                        ? `${Number(item.price).toLocaleString()} KIP`
-                        : ""}
+                    <span className="font-black text-gray-700 text-sm shrink-0 ml-2">
+                      {Number(item.subtotal || 0).toLocaleString()} ₭
                     </span>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-6 mt-6">
-              <div className="flex justify-between items-center mb-6">
-                <span className="text-gray-400 font-bold">ຍອດລວມທັງໝົດ</span>
+            {/* ຍອດລວມ ແລະ ປຸ່ມກົດ Action ປ່ຽນສະຖານະ */}
+            <div className="border-t border-gray-200 pt-4 mt-4 bg-white space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500 font-bold">ຍອດລວມທັງໝົດ:</span>
                 <span className="text-2xl font-black text-orange-600">
-                  {selectedOrder.total_amount} KIP
+                  {Number(selectedOrder.total_amount || 0).toLocaleString()} ₭
                 </span>
               </div>
+
+              {/* 🎯 ປຸ່ມກົດອັບເດດສະຖານະແຕ່ລະຂັ້ນຕອນ */}
+              {selectedOrder.order_status === "pending" && (
+                <button
+                  onClick={() => handleUpdateStatus(selectedOrder.order_id, "cooking")}
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-xl font-black flex items-center justify-center gap-2 shadow-md transition-colors"
+                >
+                  <ChefHat size={18} />
+                  ຮັບອໍເດີ & ເລີ່ມປຸງແຕ່ງ <ArrowRight size={16} />
+                </button>
+              )}
+
+              {selectedOrder.order_status === "cooking" && (
+                <button
+                  onClick={() => handleUpdateStatus(selectedOrder.order_id, "ready")}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-black flex items-center justify-center gap-2 shadow-md transition-colors"
+                >
+                  <CheckCircle size={18} />
+                  ປຸງແຕ່ງສຳເລັດ (ແຈ້ງເສີບ) <ArrowRight size={16} />
+                </button>
+              )}
+
+              {selectedOrder.order_status === "ready" && (
+                <button
+                  onClick={() => handleUpdateStatus(selectedOrder.order_id, "completed")}
+                  className="w-full bg-gray-950 hover:bg-gray-900 text-white py-4 rounded-xl font-black flex items-center justify-center gap-2 shadow-md transition-colors"
+                >
+                  <Package size={18} />
+                  ປິດອໍເດີ (ເສີບ/ລູກຄ້າມາຮັບແລ້ວ)
+                </button>
+              )}
             </div>
           </div>
         </div>

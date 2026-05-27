@@ -32,3 +32,31 @@ body {
   color: var(--foreground);
   font-family: var(--font-lao);
 }
+
+@media print {
+  /* 1. ຊ່ອນທຸກຢ່າງໃນໜ້າເວັບ */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* 2. ເປີດໃຫ້ສະແດງສະເພາະກ່ອງໃບບິນຂອງເຮົາ */
+  #receipt-print-area, #receipt-print-area * {
+    visibility: visible;
+  }
+  
+  /* 3. ຈັດໃຫ້ໃບບິນໄປຢູ່ມຸມຊ້າຍເທິງສຸດ ຕອນດັນເຈ້ຍອອກມາ */
+  #receipt-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 58mm !important;
+    margin: 0 !important;
+    padding: 10px !important;
+  }
+
+  /* 4. ຊ່ອນຫົວ/ທ້າຍເວັບ ທີ່ Browser ມັກແຖມມາ (ເຊັ່ນ ວັນທີ, URL ເວັບ) */
+  @page {
+    size: auto;
+    margin: 0mm;
+  }
+}
