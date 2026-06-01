@@ -8,39 +8,39 @@ export default function KitchenPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. 🎯 ຟັງຊັນດຶງຂໍ້ມູນ (Fetch) ໂດຍ Join ເອົາ order_type ມາພ້ອມ
-  const fetchKitchenOrders = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('Orders')
-      .select(`
-        order_id,
-        order_status,
-        order_date,
-        order_type,
-        table_id,
-        Tables ( table_number ), 
-        Order_Details!order_id (  
-          quantity,
-          menu_id,
-          drink_id,
-          Menus ( menu_name, laoName ),
-          Drink ( drink_name, laoName )
-        )
-      `) // 🎯 ວິທີແກ້: ທາງໃນນີ້ຕ້ອງມີແຕ່ຊື່ Column ແລະ ວົງເລັບເທົ່ານັ້ນ!
-      .in('order_status', ['pending', 'cooking', 'ready'])
-      .order('order_id', { ascending: true });
+  // 1. 🎯 ຟັງຊັນດຶງຂໍ້ມູນ (Fetch) 
+ const fetchKitchenOrders = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('Orders')
+        .select(`
+          order_id,
+          order_status,
+          order_date,
+          order_type,
+          table_id,
+          items,
+          order_note
+        `)
+        .in('order_status', ['pending', 'cooking', 'ready'])
+        .order('order_id', { ascending: true });
 
-    if (error) throw error;
-    setOrders(data || []);
-  } catch (err) {
-    console.error("Fetch Error:", err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+      if (error) throw error;
 
-  // 2. ຕັ້ງຄ່າ Real-time ໃຫ້ອັບ微ເດດອັດຕະໂນມັດ
+      // 🎯 ເພີ່ມການແປງຂໍ້ມູນ (Parse) ທີ່ນີ້
+      const processedData = (data || []).map(order => ({
+        ...order,
+        items: typeof order.items === 'string' ? JSON.parse(order.items) : order.items
+      }));
+
+      setOrders(processedData);
+    } catch (err) {
+      console.error("Fetch Error:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchKitchenOrders();
 
@@ -55,10 +55,8 @@ export default function KitchenPage() {
     return () => supabase.removeChannel(channel);
   }, []);
 
-  // 3. ຟັງຊັນປ່ຽນສະຖານະອໍເດີ (Update Status)
   const updateOrderStatus = async (OrderID, currentStatus) => {
     let nextStatus = "";
-
     if (currentStatus === "pending") nextStatus = "cooking";
     else if (currentStatus === "cooking") nextStatus = "ready";
     else if (currentStatus === "ready") nextStatus = "completed";
@@ -70,12 +68,11 @@ export default function KitchenPage() {
       .update({ order_status: nextStatus })
       .eq('order_id', OrderID);
 
-    if (!error) {
-      fetchKitchenOrders(); 
-    } else {
+    if (error) {
       console.error("Update Error:", error.message);
       alert("ບໍ່ສາມາດອັບເດດສະຖານະໄດ້: " + error.message);
     }
+    // ບໍ່ຈຳເປັນຕ້ອງເອີ້ນ fetchKitchenOrders() ເພາະ Realtime ຈະອັບເດດໃຫ້ເອງ
   };
 
   if (loading) return (
@@ -108,85 +105,57 @@ export default function KitchenPage() {
               const isTakeAway = order.order_type === 'take_away';
               
               return (
-                <div 
-                  key={order.order_id} 
-                  className={cn(
-                    "bg-slate-800 rounded-3xl border-2 overflow-hidden flex flex-col",
-                    order.order_status === 'cooking' ? 'border-orange-500' : 'border-slate-700',
-                    isTakeAway && order.order_status !== 'cooking' && 'border-rose-950 shadow-lg'
-                  )}
-                >
-                  {/* 🎯 Header ຂອງ Card: ແຍກສີ ແລະ ຂໍ້ຄວາມລະຫວ່າງ ກັບບ້ານ ແລະ ກິນຢູ່ຮ້ານ */}
-                  <div 
-                    className={cn(
-                      "p-4 flex justify-between items-center text-white",
-                      order.order_status === 'cooking' 
-                        ? 'bg-orange-500 text-slate-900 font-black' 
-                        : isTakeAway 
-                          ? 'bg-rose-600 font-bold' // ສີແດງຊົມພູສະເພາະກັບບ້ານ
-                          : 'bg-slate-700'
-                    )}
-                  >
+                <div key={order.order_id} className={cn(
+                  "bg-slate-800 rounded-3xl border-2 overflow-hidden flex flex-col",
+                  order.order_status === 'cooking' ? 'border-orange-500' : 'border-slate-700'
+                )}>
+                  <div className={cn("p-4 flex justify-between items-center text-white",
+                    order.order_status === 'cooking' ? 'bg-orange-500 text-slate-900 font-black' : 'bg-slate-700'
+                  )}>
                     <span className="font-black text-lg flex items-center gap-1">
                       {isTakeAway ? (
-                        <>
-                          <ShoppingBag size={20} />
-                          ກັບບ້ານ (ຄິວ #{order.order_id})
-                        </>
+                        <><ShoppingBag size={20} /> ກັບບ້ານ (ຄິວ #{order.order_id})</>
                       ) : (
-                        ` ${order.Tables?.table_number || `ໂຕະ ${order.table_id}`}`
+                        `ໂຕະ ${order.table_id || "-"}`
                       )}
-                    </span>
-                    <div className="flex items-center gap-1 text-xs opacity-80">
-                      <Clock size={14} />
-                      {new Date(order.order_date).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
-                    </div>
+                    </span> 
                   </div>
           
-                  {/* ລາຍການອາຫານ ແລະ ເຄື່ອງດື່ມ */}
-<div className="p-5 flex-1">
-  <ul className="space-y-4">
-    {order.Order_Details?.map((item, idx) => {
-      // 🎯 ກວດເຊັກວ່າເປັນລາຍການອາຫານ ຫຼື ເຄື່ອງດື່ມ ແລ້ວດຶງເອົາຄ່າຊື່ພາສາລາວມາໃຊ້
-      const displayName = item.Menus 
-        ? (item.Menus.laoName || item.Menus.menu_name) 
-        : (item.Drink?.laoName || item.Drink?.drink_name || "ບໍ່ມີຊື່ລາຍການ");
+                  <div className="p-5 flex-1">
+                    <ul className="space-y-4">
+                      {order.items?.map((item, idx) => (
+                        <li key={idx} className="flex gap-3">
+                          <span className="bg-slate-700 text-orange-400 px-2 py-1 rounded-lg font-bold h-fit text-sm">
+                            {item.quantity}x
+                          </span>
+                          <div>
+                            <p className="font-bold text-lg leading-tight">{item.menu_name}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+{order.order_note && (
+  <div className="mt-4 p-3 bg-red-900/30 border border-red-500/30 rounded-xl">
+    <p className="text-red-400 text-xs font-bold uppercase mb-1">ຄຳສັ່ງພິເສດ:</p>
+    <p className="text-white text-sm font-medium italic">
+      "{order.order_note}"
+    </p>
+  </div>
+)}
+                  </div>
 
-      return (
-        <li key={idx} className="flex gap-3">
-          <span className={cn(
-            "px-2 py-1 rounded-lg font-bold h-fit text-sm",
-            isTakeAway ? "bg-rose-900/50 text-rose-300" : "bg-slate-700 text-orange-400"
-          )}>
-            {item.quantity}x
-          </span>
-          <div>
-            <p className="font-bold text-lg leading-tight">
-              {/* 🎯 ສະແດງຊື່ທີ່ເຮົາທຳການກວດເຊັກໄວ້ດ້ານເທິງ */}
-              {displayName}
-            </p>
-          </div>
-        </li>
-      );
-    })}
-  </ul>
-</div>
-
-                  {/* ປຸ່ມຈັດການສະຖານະ */}
                   <div className="p-4 bg-slate-900/40 border-t border-slate-700">
                     <button 
                       onClick={() => updateOrderStatus(order.order_id, order.order_status)}
                       className={cn(
-                        "w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all",
-                        order.order_status === "pending" && "bg-blue-600 hover:bg-blue-700 text-white", 
-                        order.order_status === "cooking" && "bg-orange-500 hover:bg-orange-600 text-slate-900", 
-                        order.order_status === "ready" && "bg-green-500 hover:bg-green-600 text-white"
+                        "w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2",
+                        order.order_status === "pending" ? "bg-blue-600" : order.order_status === "cooking" ? "bg-orange-500 text-slate-900" : "bg-green-500"
                       )}
-                    >                                                                        
+                    >                      
                       {order.order_status === "pending" && <><Play size={18} /> ເລີ່ມເຮັດອໍເດີ</>}
-                      {order.order_status === "cooking" && <><Timer size={18} /> ກຳລັງປຸງ (ສຳເລັດກົດນີ້)...</>}
-                      {order.order_status === "ready" && <><CheckCircle size={18} /> ພ້ອມເສີບ / ຮັບເຄື່ອງ</>}
-                    </button>                                                             
+                      {order.order_status === "cooking" && <><Timer size={18} /> ກຳລັງປຸງ...</>}
+                      {order.order_status === "ready" && <><CheckCircle size={18} /> ພ້ອມເສີບ</>}
+                    </button>                      
                   </div>
                 </div>
               );

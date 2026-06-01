@@ -23,68 +23,10 @@ export default function DashboardPage() {
     contentRef: componentRef,
     documentTitle: 'QR_Code_Receipt',
   });
-
-  // 🎯 3. ຟັງຊັນຕອນກົດປຸ່ມ "ປຣີ້ນ QR Code" (ເຮັດວຽກສະເພາະຕອນກົດ)
-  const handlePrintClick = async () => {
+  const handlePrintClick = () => {
     if (!selectedTable) return;
-
-    // 📱 ເຊັກວ່າ ຖ້າກົດຢູ່ເຄື່ອງ Sunmi ກົງໆ (Android) ໃຫ້ສັ່ງປຣີ້ນອອກເຄື່ອງມັນທັນທີ
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    if (isAndroid) {
-      handlePrint();
-      return;
-    }
-
-    // 💻 ຖ້າກົດຢູ່ໜ້າຄອມ: ໃຫ້ສົ່ງສັນຍານໄປບອກ Supabase ເພື່ອໃຫ້ Sunmi ປຣີ້ນອັດຕະໂນມັດ
-    const { error } = await supabase
-      .from('Tables') 
-      .update({ trigger_print: true })
-      .eq('table_id', selectedTable.table_id);
-
-    if (error) {
-      console.error("Error triggering print:", error.message);
-      alert("ບໍ່ສາມາດສົ່ງຄຳສັ່ງປຣີ້ນໄດ້: " + error.message);
-    } else {
-      alert(`🔔 ສົ່ງຄຳສັ່ງປຣີ້ນ ${selectedTable.table_number} ໄປຫາເຄື່ອງ Sunmi ແລ້ວ!`);
-    }
+    handlePrint();
   };
-
-  // 🎯 4. ລະບົບ Realtime ດັກຟັງຄຳສັ່ງປຣີ້ນ (ຄອມສັ່ງ -> Sunmi ປຣີ້ນ)
-  useEffect(() => {
-    const isAndroid = /Android/i.test(navigator.userAgent);
-
-    const channels = supabase
-      .channel('table-print-changes')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'Tables' }, 
-        async (payload) => {
-          // 🔥 ໃຫ້ເຮັດງານ ສະເພາະຢູ່ໃນເຄື່ອງ Sunmi (Android) ເທົ່ານັ້ນ! ຝັ່ງຄອມຈະບໍ່ເອີ້ນໜ້າປຣີ້ນ
-          if (payload.new.trigger_print === true && isAndroid) {
-            
-            // ຄົ້ນຫາໂຕະທີ່ຖືກສັ່ງປຣີ້ນມາ ເພື່ອໃຫ້ Component ໃບບິນອັບເດດຂໍ້ມູນກ່ອນປຣີ້ນ
-            const targetTable = tables.find(t => t.table_id === payload.new.table_id) || payload.new;
-            setSelectedTable(targetTable);
-
-            // ໜ່ວງເວລາເລັກນ້ອຍໃຫ້ State ອັບເດດ ແລ້ວສັ່ງປຣີ້ນທັນທີ
-            setTimeout(async () => {
-              handlePrint(); 
-
-              // ປຣີ້ນແລ້ວ ເຄຼຍຄ່າມາເປັນ false ຄືເກົ່າ ເພື່ອຮອງຮັບການກົດເທື່ອໜ້າ
-              await supabase
-                .from('Tables')
-                .update({ trigger_print: false })
-                .eq('table_id', payload.new.table_id);
-            }, 500);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channels);
-    };
-  }, [tables]);
 
   // 🎯 ຟັງຊັນດຶງຂໍ້ມູນໂຕະທັງໝົດ
   const fetchTables = async () => {
@@ -94,44 +36,36 @@ export default function DashboardPage() {
       .order('table_id', { ascending: true }); 
     
     if (!error) setTables(data);
-    setLoading(false);
+    loading && setLoading(false);
   };
 
-  // 🎯 ຟັງຊັນດຶງລາຍການອາຫານ
-  // 🎯 ເພີ່ມ laoName ເຂົ້າໄປໃນການດຶງຂໍ້ມູນ
-const fetchTableOrders = async (tableId) => {
-  const { data, error } = await supabase
-    .from('Orders')
-    .select(`
-      order_id,
-      total_amount,
-      payment_status,
-      order_status,
-      table_id,
-      Order_Details (
-        quantity,
-        subtotal,
-        menu_id,
-        drink_id,
-        Menus ( menu_name, price, laoName ),   
-        Drink ( drink_name, price, laoName )   
-      )
-    `)
-    .eq('table_id', tableId) 
-    .in('payment_status', ['unpaid', null]) 
-    .order('order_id', { ascending: false });
+  // 🛠️ ຈຸດແກ້ໄຂທີ 1: ດຶງຂໍ້ມູນຜ່ານ Column "items"
+  const fetchTableOrders = async (tableId) => {
+    const { data, error } = await supabase
+      .from('Orders')
+      .select(`
+        order_id,
+        total_amount,
+        payment_status,
+        order_status,
+        table_id,
+        items
+      `)
+      .eq('table_id', tableId) 
+      .in('payment_status', ['unpaid', null]) 
+      .order('order_id', { ascending: false });
 
-  if (error) {
-    console.error("Error fetching table orders:", error.message);
-  } else {
-    setTableOrders(data || []);
-  }
-};
+    if (error) {
+      console.error("Error fetching table orders:", error.message);
+    } else {
+      setTableOrders(data || []);
+    }
+  };
 
   useEffect(() => {
     fetchTables();
     const channel = supabase
-      .channel('table_db_changes')
+      .channel('table-db_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'Tables' }, () => {
         fetchTables();
       })
@@ -194,7 +128,7 @@ const fetchTableOrders = async (tableId) => {
       setIsBillingMode(false);
       setSelectedTable(null);
       fetchTables();
-      alert("🎉 ชຳລະເງິນສຳເລັດແລ້ວ!");
+      alert("🎉 ຊຳລະεງິນສຳເລັດແລ້ວ!");
 
     } catch (error) {
       alert("ເກີດຂໍ້ຜິດພາດ: " + error.message);
@@ -218,7 +152,7 @@ const fetchTableOrders = async (tableId) => {
               }}
               className={`p-6 rounded-[32px] border-2 transition-all cursor-pointer ${
                 selectedTable?.table_id === table.table_id ? 'border-orange-500 bg-white shadow-xl scale-105' : 
-                table.status === 'ບໍ່หว້າງ' ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-transparent'
+                table.status === 'ບໍ່ຫວ້າງ' ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-transparent'
               }`}
             >
               <div className="flex justify-between mb-2">
@@ -237,49 +171,47 @@ const fetchTableOrders = async (tableId) => {
           <div className="animate-in fade-in slide-in-from-right duration-300 h-full flex flex-col">
             
             {isBillingMode ? (
-              <div className="flex flex-col h-full space-y-6 items-center justify-between">
-                <div className="flex justify-between items-center">
+              <div className="flex flex-col h-full space-y-6 justify-between">
+                <div className="flex items-center gap-4">
                   <button onClick={() => setIsBillingMode(false)} className="p-2 hover:bg-gray-100 rounded-full">
                     <ChevronLeft size={24} />
                   </button>
-                  <h2 className="text-xl font-bold ">ບິນ {selectedTable.table_number}</h2>
+                  <h2 className="text-xl font-bold">ບິນ {selectedTable.table_number}</h2>
                 </div>
 
-               <div className="flex-1 overflow-y-auto pr-2 space-y-3">
-  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">ລາຍການອາຫານ</p>
-  {tableOrders.length > 0 ? (
-    tableOrders.flatMap(order => order.Order_Details || []).map((item, idx) => {
-      
-      // 🎯 ວິທີແກ້ໄຂ: ໃຫ້ກວດເຊັກ ແລະ ສະແດງຜົນທັງ 2 ພາສາ (ຫຼື ພາສາທີ່ມີ)
-      let name = "ບໍ່ມີຊື່ລາຍການ";
-      
-      if (item.Menus) {
-        // ຖ້າມີທັງສອງພາສາ ໃຫ້ສະແດງ "ຊື່ລາວ (ຊື່ມີອັງກິດ)" ຖ້າມີແຕ່ອັງກິດໃຫ້ສະແດງອັງກິດ
-        name = item.Menus.laoName && item.Menus.menu_name
-          ? `${item.Menus.laoName} (${item.Menus.menu_name})`
-          : (item.Menus.laoName || item.Menus.menu_name);
-      } else if (item.Drink) {
-        name = item.Drink.laoName && item.Drink.drink_name
-          ? `${item.Drink.laoName} (${item.Drink.drink_name})`
-          : (item.Drink.laoName || item.Drink.drink_name);
-      }
+                <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">ລາຍການອາຫານ</p>
+                  
+                  {tableOrders.length > 0 && tableOrders.some(o => o.items && o.items.length > 0) ? (
+                    tableOrders.flatMap(order => order.items || []).map((item, idx) => {
+                      
+                      // 🎯 ✨ ແກ້ໄຂບ່ອນນີ້: ໃຫ້ຮອງຮັບທັງ menu_name (ອາຫານ) ແລະ drink_name (ເຄື່ອງດື່ມ)
+                      const baseName = item.laoName || item.menu_name || item.drink_name || item.item_name || "ບໍ່ມີຊື່ລາຍການ";
+                      const englishName = item.menu_name || item.drink_name || "";
+                      
+                      const name = item.laoName && englishName
+                        ? `${item.laoName} (${englishName})`
+                        : baseName;
 
-      const price = item.Menus?.price || item.Drink?.price || 0;
+                      // 🎯 ປ້ອງກັນເລື່ອງຊື່ Key ຂອງຈຳນວນ (ບາງບ່ອນໃຊ້ quantity, ບາງບ່ອນໃຊ້ qty)
+                      const quantity = item.quantity || item.qty || 1;
+                      const itemPrice = item.price || (item.subtotal / quantity) || 0;
+                      const displaySubtotal = item.subtotal || (itemPrice * quantity);
 
-      return (
-        <div key={idx} className="flex justify-between items-start text-sm border-b border-gray-50 pb-2">
-          <div className="flex gap-2">
-            <span className="font-bold text-orange-500">{item.quantity}x</span>
-            <span className="text-slate-700 font-medium">{name}</span>
-          </div>
-          <span className="font-bold">{(price * item.quantity).toLocaleString()}</span>
-        </div>
-      );
-    })
-  ) : (
-    <p className="text-center text-gray-400 py-10 italic">ບໍ່ມີລາຍการອາຫານ</p>
-  )}
-</div>
+                      return (
+                        <div key={idx} className="flex justify-between items-start text-sm border-b border-gray-50 pb-2">
+                          <div className="flex gap-2">
+                            <span className="font-bold text-orange-500">{quantity}x</span>
+                            <span className="text-slate-700 font-medium">{name}</span>
+                          </div>
+                          <span className="font-bold">{Number(displaySubtotal).toLocaleString()}</span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-center text-gray-400 py-10 italic">ບໍ່ມີລາຍການອາຫານ</p>
+                  )}
+                </div>
 
                 <div className="border-t border-dashed pt-4 space-y-4">
                   <div className="flex justify-between items-center">
@@ -299,7 +231,7 @@ const fetchTableOrders = async (tableId) => {
                       }`}
                     >
                       <Banknote size={20} /> 
-                      <span className="text-[10px] font-bold">ເງິນສົດ</span>
+                      <span className="text-[10px] font-bold">เງິນສົດ</span>
                     </button>
 
                     <button 
@@ -375,7 +307,6 @@ const fetchTableOrders = async (tableId) => {
         )}
       </aside>
 
-     {/* 🎯 ແກ້ໄຂຈຸດທີ 5: ປ່ຽນຈາກ className="hidden" ມາໃຊ້ style ຊ່ອງໜ້າຈໍແທນ */}
       {selectedTable && (
         <div style={{ display: 'none' }} className="print:block">
           <div ref={componentRef}>

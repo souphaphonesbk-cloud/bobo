@@ -4,7 +4,7 @@ import {
   fetchData,
   insertdata,
   uploadimages,
-  updateData, // ຕ້ອງໝັ້ນໃຈວ່າໃນ actions.js ຮອງຮັບການເຊັກ drink_id ແລ້ວ
+  updateData,
   deletedata,
 } from "../../services/actions";
 import { cn } from "../../../lib/utils/cn";
@@ -18,6 +18,7 @@ import {
   Save,
   Image as ImageIcon,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 export default function CounterPage() {
   const [itemType, setItemType] = React.useState("food"); 
@@ -35,12 +36,35 @@ export default function CounterPage() {
   const [fromData, setfromData] = React.useState({
     name: "",
     laoName: "",
-    category_id: "",
-    category_drink_id: "", 
+    category_id: "",    
+    category_drink_id: "",  
     price: "",
   });
 
-  // ດຶງຂໍ້ມູນໝວດໝູ່ ແລະ ຕັ້ງຄ່າເລີ່ມຕົ້ນໃຫ້ຖືກຕ້ອງ
+  // ເພີ່ມໄວ້ໃນຕອນເລີ່ມຕົ້ນຂອງ component
+const [isCatModalOpen, setIsCatModalOpen] = React.useState(false);
+const [newCatName, setNewCatName] = React.useState("");
+
+// ຟັງຊັນເພີ່ມໝວດໝູ່ໃໝ່ລົງ Database
+const handleAddCategory = async () => {
+  if (!newCatName) return alert("ກະລຸນາໃສ່ຊື່ໝວດໝູ່");
+  
+  const tableName = itemType === "food" ? "Categories" : "Category_drink";
+  const nameColumn = itemType === "food" ? "category_name" : "category_drink_name";
+  
+  const { error } = await supabase.from(tableName).insert([{ [nameColumn]: newCatName }]);
+  
+  if (!error) {
+    alert("ເພີ່ມໝວດໝູ່ສຳເລັດ!");
+    setNewCatName("");
+    setIsCatModalOpen(false);
+    updateCategorySelect(itemType); // ໂຫຼດຂໍ້ມູນໝວດໝູ່ໃໝ່
+  } else {
+    alert("ຜິດພາດ: " + error.message);
+  }
+};
+
+  // ດຶງຂໍ້ມູນໝວດໝູ່ ແລະ ຕັ້ງຄ່າເລີ່ມຕົ້ນ (ເອົາໄປໃຊ້ສະເພາະຕອນ Add ເທົ່ານັ້ນ)
   const updateCategorySelect = async (type) => {
     if (type === "food") {
       const catData = await fetchData("Categories");
@@ -69,7 +93,7 @@ export default function CounterPage() {
     }
   };
 
-  // ດຶງຂໍ້ມູນໝວດໝູ່ເມື່ອມີການປ່ຽນ Type (ສະເພາະຕອນບໍ່ໄດ້ແກ້ໄຂ)
+  // 🎯 ແກ້ໄຂ: ໃຫ້ເຮັດວຽກສະເພາະຕອນ Add ໃໝ່ເທົ່ານັ້ນ ຖ້າ Edit ຢູ່ຈະບໍ່ໃຫ້ມັນເຮັດວຽກຊ້ຳຊ້ອນ
   React.useEffect(() => {
     if (!isedit) {
       updateCategorySelect(itemType);
@@ -88,17 +112,16 @@ export default function CounterPage() {
 
   const handleTypeChange = (type) => {
     setItemType(type);
-    updateCategorySelect(type);
   };
 
-  // ແກ້ໄຂໃຫ້ດຶງຄ່າ ID ໝວດໝູ່ ມາແຍກໃສ່ State ໃຫ້ຖືກຕ້ອງຕາມປະເພດ
+  // 🎯 ແກ້ໄຂ: ຟັງຊັນແກ້ໄຂຂໍ້ມູນ (Edit) ໃຫ້ Lock ຄ່າໝວດໝູ່ທີ່ຖືກຕ້ອງໄວ້ ບໍ່ໃຫ້ຖືກ Reset
   const handleEdit = async (item) => {
     const isDrinkItem = Object.prototype.hasOwnProperty.call(item, "drink_id") || item.drink_name !== undefined;
     const currentType = isDrinkItem ? "drink" : "food";
     
+    setisedit(true); 
     setItemType(currentType);
     setEditId(isDrinkItem ? item.drink_id : item.menu_id);
-    setisedit(true); 
 
     if (currentType === "food") {
       const catData = await fetchData("Categories");
@@ -150,18 +173,18 @@ export default function CounterPage() {
     setimagelink(null);
   };
 
-  // 🔥 ຈຸດທີ່ແກ້ໄຂ: ປັບປຸງລະບົບການກຽມ Object ແລະ ການສົ່ງໄປແກ້ໄຂ (Update)
   const adddata = async () => {
     const currentCategoryId = itemType === "food" ? fromData.category_id : fromData.category_drink_id;
 
     if (!fromData.name || !fromData.price || !currentCategoryId) {
-      alert("ກະລຸນາກອກຂໍ້ມູນໃຫ້ຄົບຖ້ວນ (ຊື່, ລາຄາ, ໝວດໝູ່)");
+      alert("กະລຸນາກອກຂໍ້ມູນໃຫ້ຄົບຖ້ວນ (ຊື່, ລາຄາ, ໝວດໝູ່)");
       return;
     }
 
     setLoading(true);
     let finalImageUrl = imagelink;
 
+    // ຈັດການອັບໂຫຼດຮູບພາບໃໝ່ (ຖ້າມີ)
     if (files && files.name && !statusupload) {
       const urlimg = await uploadimages(files);
       if (urlimg) {
@@ -177,12 +200,12 @@ export default function CounterPage() {
     const parsedCategoryId = Number(currentCategoryId);
     
     if (isNaN(parsedCategoryId)) {
-      alert("ໝວດໝູ່ບໍ່ຖືກต้อง, ກະລຸນາເລືອກໝວດໝູ່ໃໝ່ອີກຄັ້ງ");
+      alert("ໝວດໝູ່ບໍ່ຖືກຕ້ອງ, ກະລຸນາເລືອກໝວດໝູ່ໃໝ່ອີກຄັ້ງ");
       setLoading(false);
       return;
     }
 
-    // ແຍກ Object ຂໍ້ມູນທີ່ຈະສົ່ງໄປໃຫ້ຊັດເຈນ ບໍ່ໃຫ້ມີ key ຂອງອີກຝັ່ງປົນໄປ
+    // ກຽມ Object Payload
     const recordData = itemType === "food" ? {
       menu_name: fromData.name,
       price: Number(fromData.price),
@@ -199,7 +222,6 @@ export default function CounterPage() {
 
     try {
       if (isedit) {
-        // 🎯 ສົ່ງ itemType ("food" ຫຼື "drink") ເຂົ້າໄປນຳ ເພື່ອໃຫ້ຟັງຊັນ updateData ໄປເລືອກໃຊ້ .eq() ໃຫ້ຖືກຕ້ອງ
         const editdata = await updateData(targetTable, recordData, editId, itemType);
         if (editdata) {
           alert("ແກ້ໄຂຂໍ້ມູນສຳເລັດ!");
@@ -211,7 +233,7 @@ export default function CounterPage() {
       } else {
         const menudata = await insertdata(targetTable, [recordData]);
         if (menudata) {
-          alert("...ບັນທຶກຂໍ້ມູນສຳເລັດ!");
+          alert("ບັນທຶກຂໍ້ມູນສຳເລັດ!");
           resetForm();
           await refreshMenus();
         } else {
@@ -239,9 +261,16 @@ export default function CounterPage() {
 
   const refreshMenus = async () => {
     try {
-      const menuList = await fetchData("Menus");
-      const drinkList = await fetchData("Drink");
-      
+      const { data: menuList, error } = await supabase  
+        .from('Menus')
+        .select('*')
+        .or('is_ingredient.eq.false,is_ingredient.is.null');
+
+      const { data: drinkList, error: drinkError } = await supabase
+        .from('Drink')
+        .select('*')
+        .or('is_ingredient.eq.false,is_ingredient.is.null');
+
       const safeMenus = Array.isArray(menuList) ? menuList : [];
       const safeDrinks = Array.isArray(drinkList) ? drinkList : [];
       
@@ -293,7 +322,7 @@ export default function CounterPage() {
           {/* Left Side: Form Section */}
           <div className="w-full lg:w-[450px] bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 h-fit">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-3 text-gray-800">
-              <Plus className="text-orange-500" size={24} /> {isedit ? "ແກ้ໄຂເມນູ" : "ເພີ່ມເມນູໃໝ່"}
+              <Plus className="text-orange-500" size={24} /> {isedit ? "ແກ້ໄຂເມນູ" : "ເພີ່ມເມນູໃໝ່"}
             </h2>
 
             {/* ປຸ່ມ Switch */}
@@ -318,7 +347,7 @@ export default function CounterPage() {
                   itemType === "drink" ? "bg-white text-orange-500 shadow-sm" : "text-gray-400 hover:text-gray-600"
                 )}
               >
-                🥤 ໝວດเครื่องດື່ມ
+                🥤 ໝວດເຄື່ອງດື່ມ
               </button>
             </div>
 
@@ -370,7 +399,16 @@ export default function CounterPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-bold text-gray-400 mb-2 block ml-1 uppercase">ໝວດໝູ່</label>
+                <div className="flex justify-between items-center mb-2">
+    <label className="text-sm font-bold text-gray-400 uppercase">ໝວດໝູ່</label>
+    <button 
+      type="button" 
+      onClick={() => setIsCatModalOpen(true)} // ຟັງຊັນເປີດ Modal ຂອງທ່ານ
+      className="text-[10px] font-bold text-orange-500 hover:underline cursor-pointer"
+    >
+      + ເພີ່ມໃໝ່
+    </button>
+  </div>
                   <select
                     onChange={(e) => {
                       if (itemType === "food") {
@@ -446,7 +484,7 @@ export default function CounterPage() {
                               "text-[10px] px-2 py-0.5 rounded-full font-bold",
                               isDrinkItem ? "bg-blue-100 text-blue-600" : "bg-green-100 text-green-600"
                             )}>
-                              {isDrinkItem ? "ເຄື່ອງດິ່ມ" : "ອາຫານ"}
+                              {isDrinkItem ? "ເຄື່ອງດື່ມ" : "ອາຫານ"}
                             </span>
                           </h3>
                           <span className="text-gray-500 text-sm font-medium">{item.laoName}</span>
@@ -478,6 +516,33 @@ export default function CounterPage() {
           </div>
         </div>
       </main>
+     {isCatModalOpen && (
+  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div className="bg-white p-6 rounded-[30px] w-full max-w-sm shadow-xl">
+      <h3 className="font-bold text-lg mb-4">ເພີ່ມໝວດໝູ່ ({itemType === "food" ? "ອາຫານ" : "ເຄື່ອງດື່ມ"})</h3>
+      <input 
+        className="w-full p-4 bg-gray-50 rounded-2xl mb-4 outline-none border focus:border-orange-200"
+        placeholder="ໃສ່ຊື່ໝວດໝູ່..."
+        value={newCatName}
+        onChange={(e) => setNewCatName(e.target.value)}
+      />
+      <div className="flex gap-2">
+        <button 
+          onClick={() => setIsCatModalOpen(false)} 
+          className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-600"
+        >
+          ຍົກເລີກ
+        </button>
+        <button 
+          onClick={handleAddCategory} 
+          className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold"
+        >
+          ບັນທຶກ
+        </button>
+      </div>
+    </div>
+  </div>
+)}      
     </div>
   );
 }

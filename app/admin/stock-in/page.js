@@ -7,16 +7,71 @@ import Link from 'next/link';
 export default function StockInPage() {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
-  const [isEditing, setIsEditing] = useState(false); // ສະຖານະວ່າກຳລັງແກ້ໄຂຫຼືບໍ່
-  const [editId, setEditId] = useState(null);       // ເກັບ ID ຂອງແຖວທີ່ກຳລັງແກ້ໄຂ
-  
+  const [isEditing, setIsEditing] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [type, setType] = useState('menu');
+  const [productList, setProductList] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newProductName, setNewProductName] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [categories, setCategories] = useState([]);
+
   const [formData, setFormData] = useState({
     item_name: '',
     quantity: '',
     unit: 'ແກ້ວ',
     cost_price: '',
-    supplier: ''
+    supplier: '',
+    selected_id: ''
   });
+
+  // ຟັງຊັນດຶງຂໍ້ມູນຕາມປະເພດ
+  const fetchProducts = async (selectedType) => {
+    const table = selectedType === 'menu' ? 'Menus' : 'Drink';
+    const selectQuery = selectedType === 'menu' 
+    ? 'menu_id, menu_name, category_id' 
+    : 'drink_id, drink_name, category_drink_id';
+    
+    const { data, error } = await supabase
+      .from(table)
+      .select(selectQuery)
+      .eq('is_ingredient', true);
+      
+    if (error) {
+      console.error("Error:", error);
+    } else {
+      const formattedData = data.map(item => ({
+        id: selectedType === 'menu' ? item.menu_id : item.drink_id,
+        name: selectedType === 'menu' ? item.menu_name : item.drink_name,
+        catId: selectedType === 'menu' ? item.category_id : item.category_drink_id
+      }));
+      setProductList(formattedData);
+    }
+  };
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      let table = type === 'menu' ? 'Categories' : 'Category_drink';
+      let idCol = type === 'menu' ? 'category_id' : 'category_drink_id';
+      let nameCol = type === 'menu' ? 'category_name' : 'category_drink_name';
+
+      const { data, error } = await supabase.from(table).select(`${idCol}, ${nameCol}`);
+      
+      if (!error && data) {
+        // ກັ່ນກອງເອົາສະເພາະອັນທີ່ມີຄຳວ່າ "ວັດຖຸດິບ"
+        const filtered = data
+          .map(c => ({ id: c[idCol], name: c[nameCol] }))
+          .filter(c => c.name.includes("ວັດຖຸດິບ"));
+        
+        setCategories(filtered);
+      }
+    };
+
+    fetchCategories();
+    fetchProducts(type);
+    setFormData(prev => ({ ...prev, selected_id: '', item_name: '' }));
+    setSelectedCategory(''); 
+  }, [type]);
 
   // ດຶງຂໍ້ມູນປະຫວັດ
   const fetchStockHistory = async () => {
@@ -32,21 +87,31 @@ export default function StockInPage() {
     fetchStockHistory();
   }, []);
 
-  // ຟັງຊັນ Submit (ຮອງຮັບທັງ ເພີ່ມໃໝ່ ແລະ ອັບເດດ)
+  // ຟັງຊັນ Submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
+    const selectedProduct = productList.find(i => i.id == formData.selected_id);
+     if (!selectedProduct?.catId) {
+    alert("ກະລຸນາໄປກຳນົດ Category ໃຫ້ສິນຄ້ານີ້ໃນໜ້າຈັດການສິນຄ້າກ່ອນ!");
+    return;
+  }
+  setLoading(true);
 
     const payload = { 
       item_name: formData.item_name,
       quantity: parseInt(formData.quantity),
       unit: formData.unit,
       cost_price: parseInt(formData.cost_price),
-      supplier: formData.supplier
+      supplier: formData.supplier,
+      menu_id: type === 'menu' ? formData.selected_id : null,
+      drink_id: type === 'drink' ? formData.selected_id : null,
+      category_id: type === 'menu' ? selectedProduct?.catId : null,
+    category_drink_id: type === 'drink' ? selectedProduct?.catId : null
     };
 
     if (isEditing) {
-      // ກໍລະນີ: ແກ້ໄຂຂໍ້ມູນ (Update)
       const { error } = await supabase
         .from('Stock_Transactions')
         .update(payload)
@@ -60,7 +125,6 @@ export default function StockInPage() {
         alert("ຜິດພາດໃນການອັບເດດ: " + error.message);
       }
     } else {
-      // ກໍລະນີ: ເພີ່ມຂໍ້ມູນໃໝ່ (Insert)
       const { error } = await supabase
         .from('Stock_Transactions')
         .insert([payload]);
@@ -88,7 +152,6 @@ export default function StockInPage() {
 
     if (!error) {
       alert("ລົບລາຍການສຳເລັດ!");
-      // ຖ້າລາຍການທີ່ກຳລັງແກ້ໄຂຖືກລົບ ໃຫ້ເຄຼຍຟອມນຳ
       if (editId === id) resetForm();
       fetchStockHistory();
     } else {
@@ -109,16 +172,37 @@ export default function StockInPage() {
     });
   };
 
-  // ຟັງຊັນລ້າງຂໍ້ມູນໃນຟອມ
+  const handleAddNewProduct = async () => {
+    const table = type === 'menu' ? 'Menus' : 'Drink';
+    const nameField = type === 'menu' ? 'menu_name' : 'drink_name';
+    const catField = type === 'menu' ? 'category_id' : 'category_drink_id';
+
+    const { error } = await supabase
+      .from(table)
+      .insert([{ 
+        [nameField]: newProductName, 
+        is_ingredient: true,
+        [catField]: selectedCategory // ໃຊ້ຄ່າທີ່ເລືອກຈາກ Dropdown
+      }]);
+
+    if (!error) {
+      alert("ເພີ່ມສິນຄ້າໃໝ່ສຳເລັດ!");
+      setIsModalOpen(false);
+      setNewProductName('');
+      fetchProducts(type);
+    } else {
+      alert("ຜິດພາດ: " + error.message);
+    }
+  };
+
   const resetForm = () => {
-    setFormData({ item_name: '', quantity: '', unit: 'ແກ້ວ', cost_price: '', supplier: '' });
+    setFormData({ item_name: '', quantity: '', unit: 'ແກ້ວ', cost_price: '', supplier: '', selected_id: '' });
     setIsEditing(false);
     setEditId(null);
   };
 
   return (
     <div className="min-h-screen bg-gray-50 font-lao p-4 md:p-8">
-      {/* Header */}
       <div className="max-w-4xl mx-auto mb-8 flex justify-between items-center">
         <div className="flex items-center gap-4">
           <Link href="/admin/tables" className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-100 transition-colors">
@@ -131,12 +215,8 @@ export default function StockInPage() {
       </div>
 
       <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
-        
-        {/* Form ປ້ອນຂໍ້ມູນ */}
         <div className="md:col-span-2 space-y-6">
           <form onSubmit={handleSubmit} className="bg-white p-8 rounded-[32px] shadow-sm border border-gray-200 space-y-4">
-            
-            {/* ສະແດງສະຖານະຖ້າກຳລັງຢູ່ໃນໂຫມດແກ້ໄຂ */}
             {isEditing && (
               <div className="flex justify-between items-center bg-orange-50 text-orange-800 px-4 py-2 rounded-xl text-sm font-bold">
                 <span>⚠️ ກຳລັງແກ້ໄຂລາຍການ</span>
@@ -148,22 +228,45 @@ export default function StockInPage() {
 
             <div className="grid grid-cols-1 gap-4">
               <div>
-                <label className="text-xs font-bold text-gray-700 ml-2 uppercase">Schuhesິນຄ້າ / ວັດຖຸດິບ</label>
-                <input 
-                  required
-                  className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-200 text-gray-900 font-medium focus:ring-2 focus:ring-orange-500 transition-all mt-1 outline-none"
-                  placeholder="ລະບຸຊື່ສິນຄ້າ..."
-                  value={formData.item_name}
-                  onChange={(e) => setFormData({...formData, item_name: e.target.value})}
-                />
+                <label className="text-xs font-bold text-gray-700 ml-2 uppercase">ສິນຄ້າ / ວັດຖຸດິບ</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 ml-2 uppercase">ປະເພດ</label>
+                    <select 
+                      className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-200 text-black mt-1"
+                      value={type}
+                      onChange={(e) => setType(e.target.value)}
+                    >
+                      <option value="menu">ອາຫານ / ວັດຖຸດິບ</option>
+                      <option value="drink">ເຄື່ອງດື່ມ</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 ml-2 uppercase">ເລືອກລາຍການ</label>
+                    <button type="button" onClick={() => setIsModalOpen(true)} className="text-xs text-orange-600 font-bold underline mt-1 block">
+                      + ເພີ່ມວັດຖຸດິບໃໝ່
+                    </button>
+                    <select 
+                      required
+                      className="w-full p-4 bg-gray-50 rounded-2xl border text-black border-gray-200 mt-1"
+                      value={formData.selected_id}
+                      onChange={(e) => {
+                        const selected = productList.find(i => i.id == e.target.value);
+                        setFormData({...formData, item_name: selected?.name, selected_id: e.target.value});
+                      }}
+                    >
+                      <option value="">-- ເລືອກ --</option>
+                      {productList.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    </select>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-gray-700 ml-2 uppercase">ຈຳນວນ</label>
                   <input 
-                    required
-                    type="number"
+                    required type="number"
                     className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-200 text-gray-900 font-medium focus:ring-2 focus:ring-orange-500 transition-all mt-1 outline-none"
                     placeholder="0"
                     value={formData.quantity}
@@ -173,7 +276,7 @@ export default function StockInPage() {
                 <div>
                   <label className="text-xs font-bold text-gray-700 ml-2 uppercase">ຫົວໜ່ວຍ</label>
                   <select 
-                    className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-200 text-gray-900 font-medium focus:ring-2 focus:ring-orange-500 transition-all mt-1 outline-none appearance-none"
+                    className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-200 text-gray-900 font-medium focus:ring-2 focus:ring-orange-500 transition-all mt-1 outline-none"
                     value={formData.unit}
                     onChange={(e) => setFormData({...formData, unit: e.target.value})}
                   >
@@ -190,10 +293,7 @@ export default function StockInPage() {
                 <div>
                   <label className="text-xs font-bold text-gray-700 ml-2 uppercase">ລາຄານຳເຂົ້າລວມ (KIP)</label>
                   <input 
-                    required
-                    type="text" 
-                    inputMode="numeric" 
-                    pattern="[0-9]*"
+                    required type="text" inputMode="numeric" pattern="[0-9]*"
                     className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-200 text-gray-900 font-medium focus:ring-2 focus:ring-orange-500 transition-all mt-1 outline-none"
                     placeholder="0"
                     value={formData.cost_price}
@@ -221,63 +321,94 @@ export default function StockInPage() {
                 isEditing ? 'bg-orange-600 hover:bg-orange-700' : 'bg-gray-900 hover:bg-black'
               }`}
             >
-              {loading ? (
-                <Loader2 className="animate-spin" />
-              ) : isEditing ? (
-                <Save size={20} />
-              ) : (
-                <Save size={20} />
-              )}
+              {loading ? <Loader2 className="animate-spin" /> : <Save size={20} />}
               {isEditing ? "ອັບເດດຂໍ້ມູນການນຳເຂົ້າ" : "ບັນທຶກການນຳເຂົ້າ"}
             </button>
           </form>
         </div>
 
-        {/* ປະຫວັດການນຳເຂົ້າຫຼ້າສຸດ */}
         <div className="space-y-4">
           <h3 className="font-bold flex items-center gap-2 ml-2 text-gray-900">
             <History size={18} className="text-orange-500" /> ນຳເຂົ້າຫຼ້າສຸດ
           </h3>
           <div className="space-y-3">
             {history.map((item) => (
-              <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 flex flex-col gap-1 group relative">
-                
+              <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 flex flex-col gap-1">
                 <div className="flex justify-between items-start">
                   <span className="font-bold text-sm text-gray-900">{item.item_name}</span>
-                  <span className="text-xs text-green-700 bg-green-50 px-2 py-1 rounded-md font-black">
-                    +{item.quantity} {item.unit}
-                  </span>
+                  <span className="text-xs text-green-700 bg-green-50 px-2 py-1 rounded-md font-black">+{item.quantity} {item.unit}</span>
                 </div>
-                
                 <div className="flex justify-between items-center text-[11px] text-gray-600 uppercase font-bold mt-1">
                   <span>{new Date(item.created_at).toLocaleDateString()}</span>
-                  <span className="text-gray-900">{parseInt(item.cost_price).toLocaleString()} KIP</span>
+                  <span className="text-gray-900">{parseInt(item.cost_price || 0).toLocaleString()} KIP</span>
                 </div>
-
-                {/* ສ່ວນປຸ່ມ ລົບ ແລະ ແກ້ໄຂ */}
                 <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-gray-100">
-                  <button 
-                    onClick={() => handleEditSelect(item)}
-                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
-                    title="ແກ້ໄຂ"
-                  >
+                  <button onClick={() => handleEditSelect(item)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-bold flex items-center gap-1">
                     <Edit2 size={14} /> ແກ້ໄຂ
                   </button>
-                  <button 
-                    onClick={() => handleDelete(item.id, item.item_name)}
-                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
-                    title="ລົບ"
-                  >
+                  <button onClick={() => handleDelete(item.id, item.item_name)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-bold flex items-center gap-1">
                     <Trash2 size={14} /> ລົບ
                   </button>
                 </div>
-
               </div>
             ))}
           </div>
         </div>
-
       </div>
+
+      {isModalOpen && (
+  <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div className="bg-white p-6 rounded-3xl w-full max-w-sm shadow-2xl border border-gray-100">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="font-black text-lg text-gray-900">ເພີ່ມວັດຖຸດິບໃໝ່</h2>
+        <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* ເພີ່ມ Select ໃຫ້ເລືອກຕາຕະລາງທີ່ຈະບັນທຶກ */}
+      <div className="mb-4">
+        <label className="text-xs font-bold text-gray-700 ml-2 uppercase">ເລືອກປະເພດທີ່ຈະເພີ່ມ:</label>
+        <select 
+          className="w-full p-4 bg-gray-50 rounded-2xl border text-black border-gray-200 mt-1"
+          value={type} // ໃຊ້ state type ທີ່ມີຢູ່ແລ້ວ
+          onChange={(e) => setType(e.target.value)}
+        >
+          <option value="menu">ອາຫານ / ວັດຖຸດິບ</option>
+          <option value="drink">ເຄື່ອງດື່ມ/ ວັດຖຸດິບ</option>
+        </select>
+      </div>
+
+      <div className="mb-4">
+  <label className="text-xs font-bold text-gray-700 ml-2 uppercase">ເລືອກໝວດໝູ່:</label>
+  <select 
+    className="w-full p-4 bg-gray-50 rounded-2xl border text-black border-gray-200 mt-1"
+    value={selectedCategory}
+    onChange={(e) => setSelectedCategory(e.target.value)}
+  >
+    <option value="">-- ເລືອກໝວດໝູ່ --</option>
+    {categories.map(cat => (
+      <option key={cat.id} value={cat.id}>{cat.name}</option>
+    ))}
+  </select>
+</div>
+      <input 
+        type="text"
+        placeholder="ຊື່ວັດຖຸດິບ..."
+        className="w-full p-4 bg-gray-50 rounded-2xl border text-black border-gray-200 mb-6 outline-none focus:ring-2 focus:ring-orange-500"
+        value={newProductName}
+        onChange={(e) => setNewProductName(e.target.value)}
+      />
+      
+      <button 
+        onClick={handleAddNewProduct} 
+        className="w-full p-4 rounded-2xl bg-gray-900 text-white font-bold hover:bg-black transition-all"
+      >
+        ບັນທຶກວັດຖຸດິບ
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 }

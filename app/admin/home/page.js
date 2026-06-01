@@ -15,9 +15,10 @@ export default function CounterOrderPage() {
   
   const [orderType, setOrderType] = useState('takeaway'); 
   const [tableId, setTableId] = useState(''); 
+  const [orderNote, setOrderNote] = useState("");
 
 
-  // 1. ດຶງຂໍ້ມູນເມນູອາຫານ ແລະ ເຄື່ອງດື່ມ
+// 1. ດຶງຂໍ້ມູນເມນູອາຫານ ແລະ ເຄື່ອງດື່ມ
 useEffect(() => {
   const fetchData = async () => {
     try {
@@ -33,33 +34,45 @@ useEffect(() => {
           .order('menu_name', { ascending: true }),
           
         supabase
-          .from('Drink')
-          .select('*')
-          .order('drink_name', { ascending: true })
-      ]);
+  .from('Drink')
+  .select(`
+    *,
+    Category_drink (
+      category_drink_name
+    )
+  `) // 🎯 ເພີ່ມການ Join ຕາຕະລາງນີ້
+  .order('drink_name', { ascending: true }),
+  ]);
 
       if (mealsResponse.error) throw mealsResponse.error;
       if (drinksResponse.error) throw drinksResponse.error;
 
-      const formattedDrinks = (drinksResponse.data || []).map(drink => ({
-        ...drink,
-        menu_id: `drink_${drink.drink_id}`, 
-        menu_name: drink.drink_name,
-        
-        // 🎯 ວິທີແກ້: ປ່ຽນຈາກ drink.drink_name ມາເປັນ drink.laoName 
-        laoName: drink.laoName || drink.drink_name, 
-        
-        is_drink: true 
-      }));
+      // 🎯 ກັ່ນກອງອາຫານ: ເອົາສະເພາະອັນທີ່ບໍ່ແມ່ນ "ວັດຖຸດິບອາຫານ"
+      const filteredMeals = (mealsResponse.data || []).filter(item => 
+        item.Categories?.category_name !== 'ວັດຖຸດິບອາຫານ'
+      );
 
-      setAllMeals(mealsResponse.data || []);
-      setAllDrinks(formattedDrinks);
+      // 🎯 ກັ່ນກອງເຄື່ອງດື່ມ: ເອົາສະເພາະອັນທີ່ບໍ່ແມ່ນ "ວັດຖຸດິບເຄື່ອງດື່ມ"
+      const formattedDrinks = (drinksResponse.data || [])
+  .filter(drink => {
+    // ກວດສອບຊື່ໝວດໝູ່ທີ່ Join ມາ
+    const categoryName = drink.Category_drink?.category_drink_name;
+    return categoryName !== 'ວັດຖຸດິບເຄື່ອງດື່ມ'; 
+  })
+  .map(drink => ({
+    ...drink,
+    menu_id: `drink_${drink.drink_id}`, 
+    menu_name: drink.drink_name,
+    laoName: drink.laoName || drink.drink_name, 
+    is_drink: true 
+  }));
 
-      // 🎯 ເພີ່ມການກວດເຊັກເງື່ອນໄຂ: ເພື່ອໃຫ້ຕອນໂຫຼດໜ້າທຳອິດ ຖ້າຢູ່ໝວດເຄື່ອງດື່ມ ໃຫ້ສະແດງຂໍ້ມູນເຄື່ອງດື່ມທັນທີ
+setAllDrinks(formattedDrinks);
+
       if (selectedCategory === 'ເຄື່ອງດື່ມ') {
         setFilteredMenus(formattedDrinks);
       } else {
-        setFilteredMenus(mealsResponse.data || []);
+        setFilteredMenus(filteredMeals);
       }
 
     } catch (err) {
@@ -70,7 +83,7 @@ useEffect(() => {
   };
 
   fetchData();
-}, [selectedCategory]); 
+}, [selectedCategory]);   
 
   // 2. ຟັງຊັນສະຫຼັບໝວດໝູ່
 const filterMenus = (category) => {
@@ -112,7 +125,7 @@ const filterMenus = (category) => {
 
   const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-  // 6. ຟັງຊັນສົ່ງອໍເດີ
+  // 6. ຟັງຊັນສົ່ງອໍເດີ (ສະບັບປັບປຸງ - ໃຊ້ JSONB ໃນ Orders)
   const handlePlaceOrder = async () => {
     if (cart.length === 0) {
       alert("ກະລຸນາເລືອກລາຍການອາຫານກ່ອນ!");
@@ -147,67 +160,46 @@ const filterMenus = (category) => {
         actualTableId = tableData.table_id;
       }
 
-      const orderPayload = {
-        total_amount: totalAmount, 
-        table_id: actualTableId,
-        order_date: new Date().toISOString(),
-        order_status: 'pending', 
-        payment_status: orderType === 'eating_in' ? 'unpaid' : 'paid',
-        payment_method: chosenPaymentMethod, 
-        order_type: orderType === 'eating_in' ? 'dine_in' : 'take_away'
-      };
+      // ສ້າງ JSON ຂໍ້ມູນລາຍການອາຫານ (Snapshot)
+      const itemsJson = cart.map(item => ({
+        menu_id: item.menu_id,
+        menu_name: item.laoName || item.menu_name,
+        quantity: item.quantity,
+        price: item.price,
+        subtotal: item.price * item.quantity,
+        is_drink: item.is_drink || false
+      }));
 
+      // ບັນທຶກອໍເດີ (insert ໃສ່ Orders ບ່ອນດຽວ)
       const { data: orderData, error: orderError } = await supabase
         .from('Orders')
-        .insert([orderPayload])
+        .insert([{
+          total_amount: totalAmount,
+          table_id: actualTableId,
+          order_date: new Date().toISOString(),
+          order_status: 'pending',
+          payment_status: orderType === 'eating_in' ? 'unpaid' : 'paid',
+          payment_method: chosenPaymentMethod,
+          order_type: orderType === 'eating_in' ? 'dine_in' : 'take_away',
+          items: itemsJson, 
+          order_note: orderNote
+        }])
         .select()
         .single();
 
       if (orderError) throw orderError;
 
-      const detailsPayload = cart.map((item) => {
-        if (item.is_drink) {
-          const actualDrinkId = parseInt(item.menu_id.replace('drink_', ''), 10);
-          return {
-            order_id: orderData.order_id,
-            quantity: item.quantity,
-            subtotal: item.price * item.quantity,
-            menu_id: null,        
-            drink_id: actualDrinkId 
-          };
-        } else {
-          return {
-            order_id: orderData.order_id,
-            quantity: item.quantity,
-            subtotal: item.price * item.quantity,
-            menu_id: item.menu_id, 
-            drink_id: null          
-          };
-        }
-      }); 
-
-      const { error: detailsError } = await supabase
-        .from('Order_Details')
-        .insert(detailsPayload);
-
-      if (detailsError) throw detailsError;
-
+      // ອັບເດດສະຖານະໂຕະ (ຖ້າກິນຢູ່ຮ້ານ)
       if (orderType === 'eating_in' && actualTableId) {
-        const { error: tableUpdateError } = await supabase
+        await supabase
           .from('Tables')
-          .update({ status: 'ບໍ່ຫວ້າງ' }) 
+          .update({ status: 'ບໍ່ຫວ້າງ' })
           .eq('table_id', actualTableId);
+      };
 
-        if (tableUpdateError) {
-          console.error("ລົ້ມເຫຼວໃນການອັບເດດສະຖານະໂຕະ:", tableUpdateError.message);
-        }
-      }
-
-      if (orderType === 'takeaway') {
-        alert(`🛍️ ສັ່ງກັບບ້ານ ແລະ ເກັບເງິນສຳເລັດ!\n👉 ໝາຍເລກຄິວຂອງລູກຄ້າແມ່ນ: # ${orderData.order_id}`);
-      } else {
-        alert( 'ສັ່ງອາຫານສຳເລັດ');
-      }
+      alert(orderType === 'takeaway' 
+        ? `🛍️ ສັ່ງກັບບ້ານສຳເລັດ! ໝາຍເລກຄິວ: # ${orderData.order_id}` 
+        : 'ສັ່ງອາຫານສຳເລັດ');
 
       setCart([]);
       setTableId('');
@@ -346,6 +338,15 @@ const filterMenus = (category) => {
             <span>ລາຄາລວມ:</span>
             <span className="text-orange-600 font-black text-2xl">{totalAmount.toLocaleString()} ₭</span>
           </div>
+<div className="p-4 bg-gray-50 border-t border-gray-200">
+  <textarea
+    value={orderNote}
+    onChange={(e) => setOrderNote(e.target.value)}
+    placeholder="  ເຜັດໜ້ອຍ, ບໍ່ໃສ່ຜັກ"
+    className="w-full p-3 border border-gray-300 rounded-xl  text-gray-500 text-sm focus:border-orange-500 focus:outline-none"
+    rows="2"
+  />
+</div>
           <button
             disabled={submitting || cart.length === 0}
             onClick={handlePlaceOrder}

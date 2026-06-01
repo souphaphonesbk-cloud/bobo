@@ -28,24 +28,22 @@ export async function insertdata(tablename, data) {
 
 //U = Edit / Update
   // แก้ไขให้รองรับชื่อ ID ของทุกตาราง
-export async function updateData(tableName, recordData, id, itemType) {
-  let query = supabase.from(tableName).update(recordData);
+export const updateData = async (tableName, recordData, id, itemType) => {
+  // ເຊັກວ່າເປັນເຄື່ອງດື່ມ ຫຼື ອາຫານ ເພື່ອໃຊ້ .eq() ໃຫ້ຖືກ Column ID
+  const idColumn = itemType === "drink" ? "drink_id" : "menu_id";
 
-  // 🎯 ເຊັກປະເພດ ຖ້າເປັນເຄື່ອງດື່ມ (drink) ໃຫ້ເຊັກດ້ວຍ drink_id, ຖ້າເປັນອາຫານໃຫ້ໃຊ້ menu_id
-  if (itemType === "drink" || tableName === "Drink") {
-    query = query.eq("drink_id", id);
-  } else {
-    query = query.eq("menu_id", id);
-  }
-
-  const { data, error } = await query.select();
+  const { data, error } = await supabase
+    .from(tableName)
+    .update(recordData)
+    .eq(idColumn, id) // 🎯 ບອກໃຫ້ຊັດເຈນວ່າຈະແກ້ໄຂແຖວໃດ
+    .select();
 
   if (error) {
-    console.error("Update Error:", error.message);
+    console.error("Error updating data:", error.message);
     return null;
   }
   return data;
-}
+};
 
 // D = Delete
 export async function deletedata(tablename, condition) {

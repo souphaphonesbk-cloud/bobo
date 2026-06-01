@@ -19,7 +19,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchKitchenOrders = async () => {
+const fetchKitchenOrders = async () => {
     try {
       const { data, error } = await supabase
         .from("Orders")
@@ -30,22 +30,16 @@ export default function OrdersPage() {
           total_amount,
           table_id,
           order_type,
-          Order_Details!order_id (  
-            quantity,
-            subtotal,
-            Menus ( menu_name, laoName ),
-            Drink ( drink_name )
-          )
+          items
         `)
-        .order("order_date", { ascending: false }); // 🎯 ເອົາອໍເດີໃໝ່ສຸດຂຶ້ນກ່ອນ
+        .order("order_date", { ascending: false });
 
       if (error) throw error;
       setOrders(data || []);
       
-      // 🎯 ອັບເດດຂໍ້ມູນໃນ Modal ໃຫ້ເປັນ Realtime ຖ້າມີການປ່ຽນແປງ
       if (selectedOrder) {
-        const updatedDetail = data.find(o => o.order_id === selectedOrder.order_id);
-        if (updatedDetail) setSelectedOrder(updatedDetail);
+        const updatedOrder = data.find(o => o.order_id === selectedOrder.order_id);
+        if (updatedOrder) setSelectedOrder(updatedOrder);
       }
     } catch (err) {
       console.error("Fetch Error:", err.message);
@@ -82,6 +76,11 @@ export default function OrdersPage() {
       await fetchKitchenOrders();
     } catch (err) {
       alert("ບໍ່ສາມາດອັບເດດສະຖານະໄດ້: " + err.message);
+      setNewUser({ 
+      username: '', 
+      password: '', 
+      role: 'Staff' // ຫຼື ຄ່າ default ທີ່ເຈົ້າຕັ້ງໄວ້
+    });
     }
   };
 
@@ -115,7 +114,7 @@ export default function OrdersPage() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-black text-gray-950">ການຈັດການອໍເດີໃນຄົວ</h1>
-              <p className="text-sm text-gray-600 font-medium mt-1">ຕິດຕາມ ແລະ ປັບປຸງສະຖານະອາຫານອໍເດີໜ້າເຄົາເຕີ ແລະ QR Code</p>
+              <p className="text-sm text-gray-600 font-medium mt-1">ຕິດຕາມ ແລະ ປັບປຸງສະຖານະອາຫານອໍເດີໜ້າເຄົາເຕີ</p>
             </div>
           </div>
 
@@ -155,7 +154,7 @@ export default function OrdersPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="p-5 text-sm font-black text-gray-700">ໝາຍເລກ / ໂຕະ</th>
+                  <th className="p-5 text-sm font-black text-gray-700"> ໂຕະ</th>
                   <th className="p-5 text-sm font-black text-gray-700">ລາຍການອາຫານ</th>
                   <th className="p-5 text-sm font-black text-gray-700">
                     {currentTab === "active" ? "ເວລາສັ່ງ" : "ວັນທີ-ເວລາສັ່ງ"}
@@ -173,24 +172,18 @@ export default function OrdersPage() {
                   >
                     <td className="p-5">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs bg-gray-100 text-gray-700 font-bold px-2 py-1 rounded">
-                          #{order.order_id}
-                        </span>
                         <div className="text-lg text-gray-950 font-black">
                           {order.table_id ? `ໂຕະ  ${order.table_id}` : "🛍️ ກັບບ້ານ"}
                         </div>
                       </div>
                     </td>
                     <td className="p-5 text-sm text-gray-900 font-bold">
-                      <div className="max-w-xs truncate">
-                        {order.Order_Details?.[0]?.Menus?.laoName || order.Order_Details?.[0]?.Drink?.drink_name || "ບໍ່ມີຊື່ລາຍການ"}
-                        {order.Order_Details?.length > 1 && (
-                          <span className="text-orange-600 font-black ml-1">
-                            {` ແລະ ອີກ ${order.Order_Details.length - 1} ຢ່າງ`}
-                          </span>
-                        )}
-                      </div>
-                    </td>
+    <div className="max-w-xs truncate">
+      {order.items && order.items.length > 0 
+        ? `${order.items[0].menu_name} ${order.items.length > 1 ? ` ແລະ ອີກ ${order.items.length - 1} ຢ່າງ` : ""}`
+        : "ບໍ່ມີລາຍການ"}
+    </div>
+  </td>
                     <td className="p-5 text-sm text-gray-800 font-medium">
                       <div className="flex items-center gap-1.5">
                         <Clock size={15} className="text-gray-400" />
@@ -242,9 +235,6 @@ export default function OrdersPage() {
             <div className="flex justify-between items-center mb-6 pb-4 border-b">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs bg-gray-100 px-2 py-0.5 rounded font-bold text-gray-600">
-                    ID: #{selectedOrder.order_id}
-                  </span>
                   <span className="text-xs font-medium text-gray-500">
                     {formatDate(selectedOrder.order_date)}
                   </span>
@@ -288,31 +278,28 @@ export default function OrdersPage() {
             </div>
 
             {/* ລາຍການອາຫານ */}
-            <div className="flex-1 overflow-y-auto pr-1">
-              <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">
-                ລາຍການອາຫານທີ່ສັ່ງ ({selectedOrder.Order_Details?.length || 0})
-              </h3>
-              <div className="space-y-3">
-                {selectedOrder.Order_Details?.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex justify-between items-start bg-gray-50 p-3 rounded-xl border border-gray-100"
-                  >
-                    <div className="flex gap-3 items-center min-w-0">
-                      <span className="bg-orange-100 text-orange-700 w-7 h-7 rounded-lg flex items-center justify-center text-sm font-black shrink-0">
-                        {item.quantity}
-                      </span>
-                      <span className="font-bold text-gray-950 text-sm truncate">
-                        {item.Menus?.laoName || item.Drink?.drink_name || "ບໍ່ມີຊື່ລາຍການ"}
-                      </span>
-                    </div>
-                    <span className="font-black text-gray-700 text-sm shrink-0 ml-2">
-                      {Number(item.subtotal || 0).toLocaleString()} ₭
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+           <div className="flex-1 overflow-y-auto pr-1">
+    <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">
+      ລາຍການອາຫານທີ່ສັ່ງ ({selectedOrder.items?.length || 0})
+    </h3>
+    <div className="space-y-3">
+      {selectedOrder.items?.map((item, idx) => (
+        <div key={idx} className="flex justify-between items-start bg-gray-50 p-3 rounded-xl border border-gray-100">
+          <div className="flex gap-3 items-center min-w-0">
+            <span className="bg-orange-100 text-orange-700 w-7 h-7 rounded-lg flex items-center justify-center text-sm font-black shrink-0">
+              {item.quantity}
+            </span>
+            <span className="font-bold text-gray-950 text-sm truncate">
+              {item.menu_name}
+            </span>
+          </div>
+          <span className="font-black text-gray-700 text-sm shrink-0 ml-2">
+            {Number(item.subtotal || 0).toLocaleString()} ₭
+          </span>
+        </div>
+      ))}
+    </div>
+  </div>
 
             {/* ຍອດລວມ ແລະ ປຸ່ມກົດ Action ປ່ຽນສະຖານະ */}
             <div className="border-t border-gray-200 pt-4 mt-4 bg-white space-y-4">

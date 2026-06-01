@@ -71,7 +71,12 @@ async function fetchData() {
         }));
 
         const allCategories = catData.concat(formattedCatDrinks);
-        setCategories(allCategories);
+
+        const filteredCategories = allCategories.filter(cat => 
+    !cat.category_name.includes("ວັດຖຸດິບອາຫານ") && 
+    !cat.category_name.includes("ວັດຖຸດິບເຄື່ອງດື່ມ") 
+  );
+       setCategories(filteredCategories);
 
         // ຖ້າຍັງບໍ່ມີການເລືອກໝວດ, ໃຫ້ເລືອກໝວດທຳອິດທີ່ມີໃຫ້ອັດຕະໂນມັດ
         if (allCategories.length > 0 && !selectedCategory) {
