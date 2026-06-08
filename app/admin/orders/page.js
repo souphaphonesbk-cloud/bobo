@@ -113,7 +113,7 @@ const fetchKitchenOrders = async () => {
         <header className="mb-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-black text-gray-950">ການຈັດການອໍເດີໃນຄົວ</h1>
+              <h1 className="text-2xl font-black text-gray-950">ຕິດຕາມອໍເດີ</h1>
               <p className="text-sm text-gray-600 font-medium mt-1">ຕິດຕາມ ແລະ ປັບປຸງສະຖານະອາຫານອໍເດີໜ້າເຄົາເຕີ</p>
             </div>
           </div>

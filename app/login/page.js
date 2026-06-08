@@ -22,10 +22,12 @@ export default function Page() {
 
       if(error){
         alert("ລະຫັດບໍ່ຖືກຕ້ອງ");
-      }else{
-        alert("ເຂົ້າລະບົບສຳເລັດ");
-        router.push("/admin/home");
-      }
+      } else {
+  alert("ເຂົ້າລະບົບສຳເລັດ");
+  // ບັນທຶກຂໍ້ມູນ User ໄວ້
+  localStorage.setItem("currentUser", JSON.stringify(data)); 
+  router.push("/admin/home");
+}
     }
     return (
         /* 1. ตัวแม่: ใช้ relative และสั่งให้สูงเต็มจอ (h-screen) */

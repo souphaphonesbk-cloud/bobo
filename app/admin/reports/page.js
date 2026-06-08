@@ -10,53 +10,35 @@ export default function ReportsPage() {
   const [totalExpense, setTotalExpense] = useState(0);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     fetchReportData();
   }, [reportType]);
 
-  const fetchReportData = async () => {
-    setLoading(true);
-    try {
-      // 1. ດຶງຂໍ້ມູນລາຍຮັບຈາກຕາຕະລາງ Orders
-      let incomeQuery = supabase
-        .from("Orders")
-        .select("order_id, total_amount, order_date");
+ const fetchReportData = async () => {
+  setLoading(true);
+  try {
+    // ປັບວັນທີໃຫ້ເປັນຮູບແບບທີ່ Supabase ເຂົ້າໃຈ (ເລີ່ມຕົ້ນມື້ ແລະ ສຸດທ້າຍມື້)
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
-      // 2. ດຶງຂໍ້ມູນລາຍຈ່າຍຈາກຕາຕະລາງ Stock_Transactions (ໃຊ້ຕົວພິມໃຫຍ່ຕາມ Supabase)
-      let expenseQuery = supabase
-        .from("Stock_Transactions")
-        .select("id, item_name, quantity, cost_price, created_at");
+    // ໃຊ້ .gte ແລະ .lte ໃສ່ທັງສອງ Query
+    let incomeQuery = supabase
+      .from("Orders")
+      .select("order_id, total_amount, order_date")
+      .gte("order_date", start.toISOString())
+      .lte("order_date", end.toISOString());
 
-      // ---- ສ່ວນຂອງການກອງວັນທີ (Filter) ----
-      const now = new Date();
-      
-      if (reportType === "daily") {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);        
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1); 
-        
-        incomeQuery = incomeQuery.gte("order_date", yesterday.toISOString()); 
-        expenseQuery = expenseQuery.gte("created_at", yesterday.toISOString());
-      } else if (reportType === "monthly") {
-        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const startIso = firstDayOfMonth.toISOString();
-        
-        incomeQuery = incomeQuery.gte("order_date", startIso);
-        expenseQuery = expenseQuery.gte("created_at", startIso);
-      } else if (reportType === "yearly") {
-        const firstDayOfYear = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-        const lastDayOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
-        
-        incomeQuery = incomeQuery
-          .gte("order_date", firstDayOfYear.toISOString())
-          .lte("order_date", lastDayOfYear.toISOString());
-          
-        expenseQuery = expenseQuery
-          .gte("created_at", firstDayOfYear.toISOString())
-          .lte("created_at", lastDayOfYear.toISOString());
-      }
+    let expenseQuery = supabase
+      .from("Stock_Transactions")
+      .select("id, item_name, quantity, cost_price, created_at")
+      .gte("created_at", start.toISOString())
+      .lte("created_at", end.toISOString());
 
       const [incomeRes, expenseRes] = await Promise.all([incomeQuery, expenseQuery]);
 
@@ -133,26 +115,27 @@ export default function ReportsPage() {
             <p className="text-gray-500 mt-1">ຕິດຕາມສະຖານະທາງການເງິນຂອງຮ້ານ Puckluck</p>
           </div>
           
-          <div className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-xl shadow-sm border border-gray-200">
-            <button
-              onClick={() => setReportType("daily")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${reportType === "daily" ? "bg-orange-500 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
-            >
-              ປະຈຳວັນ
-            </button>
-            <button
-              onClick={() => setReportType("monthly")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${reportType === "monthly" ? "bg-orange-500 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
-            >
-              ປະຈຳເດືອນ
-            </button>
-            <button
-              onClick={() => setReportType("yearly")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${reportType === "yearly" ? "bg-orange-500 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
-            >
-              ປະຈຳປີ
-            </button>
-          </div>
+          <div className="flex items-center gap-2 mt-4 text-black">
+  <input 
+    type="date" 
+    value={startDate} 
+    onChange={(e) => setStartDate(e.target.value)}
+    className="border p-2 rounded-lg"
+  />
+  <span>ເຖິງ</span>
+  <input 
+    type="date" 
+    value={endDate} 
+    onChange={(e) => setEndDate(e.target.value)}
+    className="border p-2 rounded-lg"
+  />
+  <button 
+    onClick={fetchReportData}
+    className="bg-orange-500 text-white px-4 py-2 rounded-lg"
+  >
+    ຄົ້ນຫາ
+  </button>
+</div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

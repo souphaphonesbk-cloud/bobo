@@ -1,6 +1,8 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect,useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useReactToPrint } from 'react-to-print';
+import PrintableReceipt from '../../compronent/PrintableReceipt';
 import { ShoppingBag, Utensils, ShoppingCart, Plus, Minus, Trash2, Loader2, CheckCircle, Image as ImageIcon, Coffee } from 'lucide-react';
 
 export default function CounterOrderPage() {
@@ -16,6 +18,12 @@ export default function CounterOrderPage() {
   const [orderType, setOrderType] = useState('takeaway'); 
   const [tableId, setTableId] = useState(''); 
   const [orderNote, setOrderNote] = useState("");
+  const componentRef = useRef(null);
+
+  const handlePrint = useReactToPrint({
+    contentRef: componentRef,
+    documentTitle: 'Receipt_' + new Date().getTime(),
+  });
 
 
 // 1. ດຶງຂໍ້ມູນເມນູອາຫານ ແລະ ເຄື່ອງດື່ມ
@@ -196,9 +204,10 @@ const filterMenus = (category) => {
           .update({ status: 'ບໍ່ຫວ້າງ' })
           .eq('table_id', actualTableId);
       };
+      handlePrint();
 
       alert(orderType === 'takeaway' 
-        ? `🛍️ ສັ່ງກັບບ້ານສຳເລັດ! ໝາຍເລກຄິວ: # ${orderData.order_id}` 
+        ? `🛍️ ສັ່ງກັບບ້ານສຳເລັດ! ໝາຍເລກຄິວ: ${orderData.order_id}` 
         : 'ສັ່ງອາຫານສຳເລັດ');
 
       setCart([]);
@@ -358,6 +367,18 @@ const filterMenus = (category) => {
         </div>
 
       </div>
+      <div style={{ display: 'none' }}>
+  <div ref={componentRef}>
+    <PrintableReceipt 
+      tableNumber={orderType === 'eating_in' ? `ໂຕະ ${tableId}` : 'ສັ່ງກັບບ້ານ'} 
+      items={cart.map(item => ({
+        ...item,
+        subtotal: item.price * item.quantity 
+      }))}
+      totalAmount={totalAmount}
+    />
+  </div>
+</div>
     </div>
   );
 }

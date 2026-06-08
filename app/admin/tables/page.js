@@ -217,7 +217,7 @@ export default function DashboardPage() {
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-bold">ຍອດລວມທັງໝົດ</span>
                     <span className="text-2xl font-black text-orange-500">
-                      {tableOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0).toLocaleString()}
+                      {tableOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0).toLocaleString()} ₭
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -247,6 +247,12 @@ export default function DashboardPage() {
                       <span className="text-[10px] font-bold">ໂອນເງິນ (OnePay)</span>
                     </button>
                   </div>
+                  <button 
+  onClick={handlePrintClick}
+  className="w-full bg-slate-800 text-white py-3 rounded-2xl font-bold hover:bg-black transition-all mb-2 shadow-lg"
+>
+  ພິມໃບບິນ
+</button>
                   <button 
                     onClick={() => handleCheckout(selectedTable.table_id)}
                     className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold hover:bg-orange-600 shadow-lg"
@@ -308,15 +314,18 @@ export default function DashboardPage() {
       </aside>
 
       {selectedTable && (
-        <div style={{ display: 'none' }} className="print:block">
-          <div ref={componentRef}>
-            <PrintableReceipt 
-              tableNumber={selectedTable.table_number} 
-              qrValue={`https://bobo-jade.vercel.app?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
-            />
-          </div>
-        </div>
-      )}
+  <div style={{ display: 'none' }} className="print:block">
+    <div ref={componentRef}>
+      <PrintableReceipt 
+        tableNumber={selectedTable.table_number} 
+        // ຖ້າເປັນ Billing Mode ໃຫ້ສົ່ງລາຍການອາຫານໄປ, ຖ້າບໍ່ແມ່ນໃຫ້ສົ່ງ array ຫວ່າງ
+        items={isBillingMode ? tableOrders.flatMap(o => o.items || []) : []}
+        totalAmount={isBillingMode ? tableOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0) : 0}
+        qrValue={`https://bobo-jade.vercel.app?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
+      />
+    </div>
+  </div>
+)}
     </div>
   ); 
 }

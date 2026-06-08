@@ -55,7 +55,6 @@ const handleAddCategory = async () => {
   const { error } = await supabase.from(tableName).insert([{ [nameColumn]: newCatName }]);
   
   if (!error) {
-    alert("ເພີ່ມໝວດໝູ່ສຳເລັດ!");
     setNewCatName("");
     setIsCatModalOpen(false);
     updateCategorySelect(itemType); // ໂຫຼດຂໍ້ມູນໝວດໝູ່ໃໝ່
@@ -159,7 +158,6 @@ const handleAddCategory = async () => {
 
       const result = await deletedata(tableName, matchCondition);
       if (result) {
-        alert("ລົບຂໍ້ມູນສຳເລັດ!");
         refreshMenus();
       }
     }
@@ -224,7 +222,6 @@ const handleAddCategory = async () => {
       if (isedit) {
         const editdata = await updateData(targetTable, recordData, editId, itemType);
         if (editdata) {
-          alert("ແກ້ໄຂຂໍ້ມູນສຳເລັດ!");
           resetForm();
           await refreshMenus();
         } else {
@@ -233,7 +230,6 @@ const handleAddCategory = async () => {
       } else {
         const menudata = await insertdata(targetTable, [recordData]);
         if (menudata) {
-          alert("ບັນທຶກຂໍ້ມູນສຳເລັດ!");
           resetForm();
           await refreshMenus();
         } else {
