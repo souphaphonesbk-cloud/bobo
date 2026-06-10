@@ -129,51 +129,63 @@ useEffect(() => {
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
 
   const handleConfirmOrder = async () => {
-    // 1. ຄິດໄລ່ຍອດລວມກ່ອນ (ຕ້ອງມີການປະກາດຕົວປ່ຽນນີ້)
     const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
 
-    // 2. ສ້າງຂໍ້ມູນລາຍການອາຫານ
-    const orderItemsJson = cartItems.map(item => ({
-      menu_id: item.is_drink ? null : (Number(item.id) || null),
-      drink_id: item.is_drink ? (Number(item.id) || null) : null,
-      menu_name: item.name || "Unknown",
-      laoName: item.laoName || "",
-      quantity: Number(item.qty) || 1,
-      price: Number(item.price) || 0,
-      subtotal: Number(item.price * item.qty) || 0
-    }));
-
     try {
-      // ກວດສອບກ່ອນສົ່ງ
-      if (orderItemsJson.length === 0) {
+      if (cartItems.length === 0) {
         alert("ບໍ່ມີລາຍການອາຫານໃນຕະກ້າ");
         return;
       }
 
+      // 🎯 1. ປ່ຽນມາໃຊ້ Timestamp ແບບຕົວເລກ (int8) ແທນການສຸ່ມ ປ້ອງກັນຄ່າ Null ແລະ ບໍ່ຊ້ຳກັນແນ່ນອນ
+      const generatedOrderId = Date.now(); 
+
+      // 2. ຈັດໂຄງສ້າງຂໍ້ມູນກ່ອນສົ່ງໄປ Supabase
+      const rowsToInsert = cartItems.map(item => ({
+        order_id: generatedOrderId,               // 🎯 ສົ່ງ Timestamp ໄປເປັນເລກບິນ (int8)
+        table_id: Number(tableInfo.id) || null,
+        total_amount: totalAmount,
+        payment_status: 'unpaid',
+        order_status: 'pending',
+        order_note: orderNote || "",
+        
+        // 🎯 ປ້ອນຄ່າໃສ່ ID ຄໍລຳດ້ານນອກໃຫ້ຖືກຕ້ອງຕາມປະເພດສິນຄ້າ
+        menu_id: item.is_drink ? null : Number(item.id),
+        drink_id: item.is_drink ? Number(item.id) : null,
+        category_id: item.is_drink ? null : (Number(item.category_id) || null),
+        category_drink_id: item.is_drink ? (Number(item.category_id) || null) : null, // 🎯 ເພີ່ມຄໍລຳນີ້ໃຫ້ຕົງກັບ DB
+        
+        // 🎯 ແກ້ Bug ຫ້ອງຄົວ: ຝັງຂໍ້ມູນຊື່ເມນູທັງໝົດລົງໄປໃນຄໍລຳ items (JSON) ເລີຍ 
+        // ເຮັດໃຫ້ໜ້າຫ້ອງຄົວ (Kitchen) ສາມາດອ່ານຄ່າ item.menu_name ໄປສະແດງໄດ້ທັນທີ ບໍ່ວ່າຈະເປັນ Food ຫຼື Drink!
+        items: [{
+          id: Number(item.id),
+          menu_name: item.name || "Unknown", // 🎯 ຝັງຊື່ພາສາອັງກິດ/ຫຼັກ
+          laoName: item.laoName || "",       // 🎯 ຝັງຊື່ພາສາລາວ (ຫ້ອງຄົວຈະອ່ານຄ່າໂຕນີ້)
+          quantity: Number(item.qty) || 1,
+          price: Number(item.price) || 0,
+          subtotal: Number(item.price * item.qty) || 0,
+          is_drink: item.is_drink
+        }]
+      }));
+
+      console.log("Data to insert:", rowsToInsert); // ສາມາດເປີດຊ່ອງ Console ເບິ່ງຂໍ້ມູນກ່ອນຍິງໄດ້
+
+      // 3. Insert ລົງຕາຕະລາງ Orders ຢູ່ Supabase
       const { data, error: orderError } = await supabase
         .from('Orders')
-        .insert([
-          { 
-            table_id: tableInfo.id, 
-            total_amount: totalAmount, // ໃຊ້ totalAmount ທີ່ຄິດໄລ່ຂ້າງເທິງ
-            payment_status: 'unpaid',
-            order_status: 'pending',
-            items: orderItemsJson, // ຂໍ້ມູນ JSON
-            order_note: orderNote
-          }
-        ]);
+        .insert(rowsToInsert); 
 
       if (orderError) {
-        console.error("Supabase Error:", orderError); // ເບິ່ງ Error ທີ່ນີ້ຖ້າມັນບໍ່ຂຶ້ນ
+        console.error("Supabase Error Details:", orderError);
         throw orderError;
       }
       
-      setIsOrdered(true); // ປ່ຽນສະຖານະປຸ່ມ
-      alert("ສັ່ງອາຫານສຳເລັດແລ້ວ!");
-      localStorage.removeItem('puckluck_cart');
+      setIsOrdered(true);
+      alert("ສົ່ງອໍເດີສຳເລັດແລ້ວ!");
+      localStorage.removeItem('puckluck_cart'); // ເຄຼຍຕະກ້າສິນຄ້າ
       
     } catch (error) {
-      console.error("Error:", error.message);
+      console.error("Error During Confirmation:", error.message);
       alert("ເກີດຂໍ້ຜິດພາດ: " + error.message);
     }
   };

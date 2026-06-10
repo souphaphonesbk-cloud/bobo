@@ -17,6 +17,8 @@ import {
   Pencil,
   Save,
   Image as ImageIcon,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -41,29 +43,61 @@ export default function CounterPage() {
     price: "",
   });
 
-  // ເພີ່ມໄວ້ໃນຕອນເລີ່ມຕົ້ນຂອງ component
-const [isCatModalOpen, setIsCatModalOpen] = React.useState(false);
-const [newCatName, setNewCatName] = React.useState("");
+  const [isCatModalOpen, setIsCatModalOpen] = React.useState(false);
+  const [newCatName, setNewCatName] = React.useState("");
 
-// ຟັງຊັນເພີ່ມໝວດໝູ່ໃໝ່ລົງ Database
-const handleAddCategory = async () => {
-  if (!newCatName) return alert("ກະລຸນາໃສ່ຊື່ໝວດໝູ່");
-  
-  const tableName = itemType === "food" ? "Categories" : "Category_drink";
-  const nameColumn = itemType === "food" ? "category_name" : "category_drink_name";
-  
-  const { error } = await supabase.from(tableName).insert([{ [nameColumn]: newCatName }]);
-  
-  if (!error) {
-    setNewCatName("");
-    setIsCatModalOpen(false);
-    updateCategorySelect(itemType); // ໂຫຼດຂໍ້ມູນໝວດໝູ່ໃໝ່
-  } else {
-    alert("ຜິດພາດ: " + error.message);
-  }
-};
+  // 🌟 ຟັງຊັນສຳລັບ ເປີດ-ປິດ ເມນູອາຫານ/ເຄື່ອງດື່ມ (Toggle Availability)
+  const toggleAvailability = async (item) => {
+    const isDrinkItem = Object.prototype.hasOwnProperty.call(item, "drink_id") || item.drink_name !== undefined;
+    const tableName = isDrinkItem ? "Drink" : "Menus";
+    const idColumn = isDrinkItem ? "drink_id" : "menu_id";
+    const currentId = isDrinkItem ? item.drink_id : item.menu_id;
+    
+    // ສະຫຼັບສະຖານະ (ຖ້າບໍ່ມີຄ່າ ຫຼື ເປັນ true ໃຫ້ປ່ຽນເປັນ false, ຖ້າເປັນ false ໃຫ້ປ່ຽນເປັນ true)
+    const newStatus = item.is_available === false ? true : false;
 
-  // ດຶງຂໍ້ມູນໝວດໝູ່ ແລະ ຕັ້ງຄ່າເລີ່ມຕົ້ນ (ເອົາໄປໃຊ້ສະເພາະຕອນ Add ເທົ່ານັ້ນ)
+    try {
+      const { error } = await supabase
+        .from(tableName)
+        .update({ is_available: newStatus })
+        .eq(idColumn, currentId);
+
+      if (!error) {
+        // ອັບເດດ State ໃນໜ້າຈໍທັນທີໂດຍບໍ່ຕ້ອງ Reload ໜ້າ
+        setFoods((prev) =>
+          prev.map((f) => {
+            const fId = isDrinkItem ? f.drink_id : f.menu_id;
+            if (fId === currentId) {
+              return { ...f, is_available: newStatus };
+            }
+            return f;
+          })
+        );
+      } else {
+        alert("ບໍ່ສາມາດປ່ຽນສະຖານະໄດ້: " + error.message);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCatName) return alert("ກະລຸນາໃສ່ຊື່ໝວດໝູ່");
+    
+    const tableName = itemType === "food" ? "Categories" : "Category_drink";
+    const nameColumn = itemType === "food" ? "category_name" : "category_drink_name";
+    
+    const { error } = await supabase.from(tableName).insert([{ [nameColumn]: newCatName }]);
+    
+    if (!error) {
+      setNewCatName("");
+      setIsCatModalOpen(false);
+      updateCategorySelect(itemType); 
+    } else {
+      alert("ຜິດພາດ: " + error.message);
+    }
+  };
+
   const updateCategorySelect = async (type) => {
     if (type === "food") {
       const catData = await fetchData("Categories");
@@ -92,7 +126,6 @@ const handleAddCategory = async () => {
     }
   };
 
-  // 🎯 ແກ້ໄຂ: ໃຫ້ເຮັດວຽກສະເພາະຕອນ Add ໃໝ່ເທົ່ານັ້ນ ຖ້າ Edit ຢູ່ຈະບໍ່ໃຫ້ມັນເຮັດວຽກຊ້ຳຊ້ອນ
   React.useEffect(() => {
     if (!isedit) {
       updateCategorySelect(itemType);
@@ -113,7 +146,6 @@ const handleAddCategory = async () => {
     setItemType(type);
   };
 
-  // 🎯 ແກ້ໄຂ: ຟັງຊັນແກ້ໄຂຂໍ້ມູນ (Edit) ໃຫ້ Lock ຄ່າໝວດໝູ່ທີ່ຖືກຕ້ອງໄວ້ ບໍ່ໃຫ້ຖືກ Reset
   const handleEdit = async (item) => {
     const isDrinkItem = Object.prototype.hasOwnProperty.call(item, "drink_id") || item.drink_name !== undefined;
     const currentType = isDrinkItem ? "drink" : "food";
@@ -182,7 +214,6 @@ const handleAddCategory = async () => {
     setLoading(true);
     let finalImageUrl = imagelink;
 
-    // ຈັດການອັບໂຫຼດຮູບພາບໃໝ່ (ຖ້າມີ)
     if (files && files.name && !statusupload) {
       const urlimg = await uploadimages(files);
       if (urlimg) {
@@ -199,11 +230,9 @@ const handleAddCategory = async () => {
     
     if (isNaN(parsedCategoryId)) {
       alert("ໝວດໝູ່ບໍ່ຖືກຕ້ອງ, ກະລຸນາເລືອກໝວດໝູ່ໃໝ່ອີກຄັ້ງ");
-      setLoading(false);
       return;
     }
 
-    // ກຽມ Object Payload
     const recordData = itemType === "food" ? {
       menu_name: fromData.name,
       price: Number(fromData.price),
@@ -225,7 +254,7 @@ const handleAddCategory = async () => {
           resetForm();
           await refreshMenus();
         } else {
-          alert("ບໍ່ສາມາດແກ້ໄຂຂໍ້ມູນໄດ້ ກະລຸນາກວດເຊັກຟັງຊັນ updateData ໃນ actions.js");
+          alert("ບໍ່ສາມາດແກ້ໄຂຂໍ້ມູນໄດ້");
         }
       } else {
         const menudata = await insertdata(targetTable, [recordData]);
@@ -233,12 +262,11 @@ const handleAddCategory = async () => {
           resetForm();
           await refreshMenus();
         } else {
-          alert("ບໍ່ສາມາດບັນທຶກຂໍ້ມູນໄດ້, ກະລຸນາກວດເຊັກ RLS ຫຼື ໂຄງສ້າງ Table");
+          alert("ບໍ່ສາມາດບັນທຶກຂໍ້ມູນໄດ້");
         }
       }
     } catch (err) {
-      console.error("Error inserting/updating data:", err);
-      alert("ເກີດຂໍ້ຜິດພາດໃນລະບົບ");
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -257,12 +285,12 @@ const handleAddCategory = async () => {
 
   const refreshMenus = async () => {
     try {
-      const { data: menuList, error } = await supabase  
+      const { data: menuList } = await supabase  
         .from('Menus')
         .select('*')
         .or('is_ingredient.eq.false,is_ingredient.is.null');
 
-      const { data: drinkList, error: drinkError } = await supabase
+      const { data: drinkList } = await supabase
         .from('Drink')
         .select('*')
         .or('is_ingredient.eq.false,is_ingredient.is.null');
@@ -272,7 +300,7 @@ const handleAddCategory = async () => {
       
       setFoods([...safeMenus, ...safeDrinks]);
     } catch (error) {
-      console.error("Error fetching menus/drinks:", error);
+      console.error(error);
     }
   };
 
@@ -315,13 +343,12 @@ const handleAddCategory = async () => {
         </header>
 
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Left Side: Form Section */}
+          {/* Form Section */}
           <div className="w-full lg:w-[450px] bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 h-fit">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-3 text-gray-800">
               <Plus className="text-orange-500" size={24} /> {isedit ? "ແກ້ໄຂເມນູ" : "ເພີ່ມເມນູໃໝ່"}
             </h2>
 
-            {/* ປຸ່ມ Switch */}
             <div className="flex gap-2 bg-gray-100 p-1 rounded-2xl mb-6">
               <button
                 type="button"
@@ -395,16 +422,16 @@ const handleAddCategory = async () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                <div className="flex justify-between items-center mb-2">
-    <label className="text-sm font-bold text-gray-400 uppercase">ໝວດໝູ່</label>
-    <button 
-      type="button" 
-      onClick={() => setIsCatModalOpen(true)} // ຟັງຊັນເປີດ Modal ຂອງທ່ານ
-      className="text-[10px] font-bold text-orange-500 hover:underline cursor-pointer"
-    >
-      + ເພີ່ມໃໝ່
-    </button>
-  </div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-sm font-bold text-gray-400 uppercase">ໝວດໝູ່</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsCatModalOpen(true)} 
+                      className="text-[10px] font-bold text-orange-500 hover:underline cursor-pointer"
+                    >
+                      + ເພີ່ມໃໝ່
+                    </button>
+                  </div>
                   <select
                     onChange={(e) => {
                       if (itemType === "food") {
@@ -456,42 +483,71 @@ const handleAddCategory = async () => {
             </div>
           </div>
 
-          {/* Right Side: List Section */}
+          {/* List Section */}
           <div className="flex-1 h-screen flex flex-col overflow-hidden bg-white p-8 rounded-[40px] shadow-sm border border-gray-100">
             <h1 className="text-gray-800 font-bold text-xl">• ລາຍການທັງໝົດ ({filteredFoods.length} ລາຍການ)</h1>
             <div className="grid flex-1 overflow-y-auto grid-cols-1 gap-4 mt-6 pb-24 no-scrollbar">
               {filteredFoods.map((item, index) => {
                 const isDrinkItem = Object.prototype.hasOwnProperty.call(item, "drink_id") || item.drink_name !== undefined;
+                
+                // 🌟 ກວດເຊັກສະຖານະການ ເປີດ-ປິດ (ຄ່າເລີ່ມຕົ້ນຖ້າເປັນ null ຫຼື undefined ໃຫ້ເປັນ true)
+                const isAvailable = item.is_available !== false;
+
                 return (
                   <div
                     key={index}
-                    className="flex items-center gap-5 p-5 border border-gray-50 rounded-[24px] hover:bg-gray-50/50 transition-all group"
+                    className={cn(
+                      "flex items-center gap-5 p-5 border rounded-[24px] transition-all group",
+                      isAvailable ? "border-gray-50 hover:bg-gray-50/50" : "border-gray-200 bg-gray-50/70 opacity-75"
+                    )}
                   >
-                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-300 overflow-hidden flex-shrink-0">
-                      <img className="w-full h-full object-cover" src={item.image || "/icon/no-image.png"} alt="preview" />
+                    <div className="relative w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-300 overflow-hidden flex-shrink-0">
+                      <img className={cn("w-full h-full object-cover", !isAvailable && "grayscale brightness-70")} src={item.image || "/icon/no-image.png"} alt="preview" />
+                      {!isAvailable && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <span className="text-[10px] text-white font-bold bg-red-500 px-1.5 py-0.5 rounded-md">ໝົດ</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex-1">
                       <div className="flex justify-between items-start">
                         <div className="flex flex-col">
-                          <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                          <h3 className={cn("font-bold flex items-center gap-2", isAvailable ? "text-gray-800" : "text-gray-400 line-through")}>
                             {isDrinkItem ? item.drink_name : item.menu_name}
                             <span className={cn(
                               "text-[10px] px-2 py-0.5 rounded-full font-bold",
                               isDrinkItem ? "bg-blue-100 text-blue-600" : "bg-green-100 text-green-600"
                             )}>
-                              {isDrinkItem ? "ເຄື່ອງດື່ມ" : "ອາຫານ"}
+                              {isDrinkItem ? "ເຄື່ອງດື່ມ" : "อาหาร"}
                             </span>
                           </h3>
                           <span className="text-gray-500 text-sm font-medium">{item.laoName}</span>
                         </div>
                       </div>
                       <div className="flex justify-between text-gray-500 mt-1">
-                        <span className="font-bold text-yellow-500">{item.price?.toLocaleString()} kip</span>
+                        <span className={cn("font-bold", isAvailable ? "text-yellow-500" : "text-gray-400")}>
+                          {item.price?.toLocaleString()} kip
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex gap-2">
+                      {/* 🌟 ປຸ່ມ Eye/EyeOff ສຳລັບ ເປີດ-ປິດ ເມນູ */}
+                      <button 
+                        type="button" 
+                        onClick={() => toggleAvailability(item)} 
+                        title={isAvailable ? "ກົດເພື່ອປິດເມນູນີ້" : "ກົດເພື່ອເປີດເມນູນີ້"}
+                        className={cn(
+                          "p-2 rounded-xl border transition-colors",
+                          isAvailable 
+                            ? "border-gray-100 bg-white text-green-600 hover:bg-green-50" 
+                            : "border-gray-300 bg-gray-200 text-red-500 hover:bg-red-100"
+                        )}
+                      >
+                        {isAvailable ? <Eye size={18} /> : <EyeOff size={18} />}
+                      </button>
+
                       <button type="button" onClick={() => handleEdit(item)} className="p-2 rounded-xl border border-gray-100 bg-white text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors">
                         <Pencil size={18} />
                       </button>
@@ -512,33 +568,34 @@ const handleAddCategory = async () => {
           </div>
         </div>
       </main>
-     {isCatModalOpen && (
-  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-    <div className="bg-white p-6 rounded-[30px] w-full max-w-sm shadow-xl">
-      <h3 className="font-bold text-lg mb-4">ເພີ່ມໝວດໝູ່ ({itemType === "food" ? "ອາຫານ" : "ເຄື່ອງດື່ມ"})</h3>
-      <input 
-        className="w-full p-4 bg-gray-50 rounded-2xl mb-4 outline-none border focus:border-orange-200"
-        placeholder="ໃສ່ຊື່ໝວດໝູ່..."
-        value={newCatName}
-        onChange={(e) => setNewCatName(e.target.value)}
-      />
-      <div className="flex gap-2">
-        <button 
-          onClick={() => setIsCatModalOpen(false)} 
-          className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-600"
-        >
-          ຍົກເລີກ
-        </button>
-        <button 
-          onClick={handleAddCategory} 
-          className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold"
-        >
-          ບັນທຶກ
-        </button>
-      </div>
-    </div>
-  </div>
-)}      
+
+      {isCatModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-[30px] w-full max-w-sm shadow-xl">
+            <h3 className="font-bold text-lg mb-4">ເພີ່ມໝວດໝູ່ ({itemType === "food" ? "ອາຫານ" : "ເຄື່ອງດື່ມ"})</h3>
+            <input 
+              className="w-full p-4 bg-gray-50 rounded-2xl mb-4 outline-none border focus:border-orange-200"
+              placeholder="ໃສ່ຊື່ໝວດໝູ່..."
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setIsCatModalOpen(false)} 
+                className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-600"
+              >
+                ຍົກເລີກ
+              </button>
+              <button 
+                onClick={handleAddCategory} 
+                className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold"
+              >
+                ບັນທຶກ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}      
     </div>
   );
 }

@@ -264,7 +264,7 @@ return (
                 <div>
                   <label className="text-xs font-bold text-gray-700 ml-2 ">ຫົວໜ່ວຍ</label>
                   <select className="w-full p-3 bg-gray-50 rounded-2xl text-gray-700 border mt-1 " value={formData.unit} onChange={(e) => setFormData({...formData, unit: e.target.value})}>
-                    <option>ແກ້ວ</option><option>ແກັດ</option><option>ກິໂລ</option><option>ຖົງ</option><option>ແພັກ</option><option>ລາງ</option>
+                    <option>ແກ້ວ</option><option>ແກັດ</option><option>ກິໂລ</option><option>ຖົງ</option><option>ແພັກ</option><option>ລາງ</option><option>ຊະນິດ</option>
                   </select>
                 </div>
                 <div>

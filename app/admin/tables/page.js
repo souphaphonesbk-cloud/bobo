@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import { Search, Bell, QrCode, CreditCard, UserPlus, Timer, CheckCircle2, Banknote, ChevronLeft } from 'lucide-react';
 import PrintableReceipt from '../../compronent/PrintableReceipt'; 
+// 🔔 Import SweetAlert2 ເຂົ້າວຽກ
+import Swal from 'sweetalert2';
 
 export default function DashboardPage() {
   const [tables, setTables] = useState([]);
@@ -13,12 +15,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [isBillingMode, setIsBillingMode] = useState(false); 
   const [tableOrders, setTableOrders] = useState([]); 
-  const [paymentMethod, setPaymentMethod] = useState('cash'); 
-
-  // 🎯 1. ສ້າງ Ref ຜູກກັບ Component ໃບບິນທີ່ຈະປຣີ້ນ
+  const [paymentMethod, setPaymentMethod] = useState('cash');  
+  // 🎯 Ref ຜູກກັບ Component ໃບບິນທີ່ຈະປຣີ້ນ
   const componentRef = useRef(null);
 
-  // 🎯 2. ຕັ້ງຄ່າການປຣີ້ນດ້ວຍ useReactToPrint
+  // 🎯 ຕັ້ງຄ່າການປຣີ້ນດ້ວຍ useReactToPrint
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: 'QR_Code_Receipt',
@@ -39,7 +40,7 @@ export default function DashboardPage() {
     loading && setLoading(false);
   };
 
-  // 🛠️ ຈຸດແກ້ໄຂທີ 1: ດຶງຂໍ້ມູນຜ່ານ Column "items"
+  // ດຶງຂໍ້ມູນອໍເດີ ແລະ ລວມ Items
   const fetchTableOrders = async (tableId) => {
     const { data, error } = await supabase
       .from('Orders')
@@ -58,7 +59,33 @@ export default function DashboardPage() {
     if (error) {
       console.error("Error fetching table orders:", error.message);
     } else {
-      setTableOrders(data || []);
+      const uniqueOrdersMap = {};
+      
+      (data || []).forEach((row) => {
+        const orderId = row.order_id;
+        const parsedItems = typeof row.items === 'string' ? JSON.parse(row.items) : row.items;
+        const currentItemsArray = Array.isArray(parsedItems) ? parsedItems : (parsedItems ? [parsedItems] : []);
+
+        if (!uniqueOrdersMap[orderId]) {
+          uniqueOrdersMap[orderId] = { 
+            ...row, 
+            items: [...currentItemsArray] 
+          };
+        } else {
+          currentItemsArray.forEach(newItem => {
+            const isDuplicate = uniqueOrdersMap[orderId].items.some(
+              existingItem => (existingItem.id && existingItem.id === newItem.id) || 
+                              (existingItem.menu_name === newItem.menu_name) ||
+                              (existingItem.laoName === newItem.laoName)
+            );
+            if (!isDuplicate) {
+              uniqueOrdersMap[orderId].items.push(newItem);
+            }
+          });
+        }
+      });
+      
+      setTableOrders(Object.values(uniqueOrdersMap));
     }
   };
 
@@ -70,7 +97,7 @@ export default function DashboardPage() {
         fetchTables();
       })
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    return () => supabase.removeChannel(channel); 
   }, []);
 
   useEffect(() => {
@@ -79,7 +106,7 @@ export default function DashboardPage() {
     }
   }, [selectedTable, isBillingMode]);
 
-  // ຟັງຊັນ "ເປີດໂຕະ"
+  // 🎯 ຟັງຊັນ "ເປີດໂຕະ" (ປ່ຽນເປັນ SweetAlert2 ແລ້ວ)
   const handleOpenTable = async (id) => {
     const newToken = crypto.randomUUID(); 
     const newStatus = 'ບໍ່ຫວ້າງ';
@@ -98,11 +125,47 @@ export default function DashboardPage() {
       })
       .eq('table_id', id);
     
-    if (error) alert("ເກີດຂໍ້ຜິດພາດໃນການເປີດໂຕະ");
+    if (error) {
+      // ❌ ແຈ້ງເຕືອນເມື່ອເກີດ Error
+      Swal.fire({
+        icon: 'error',
+        title: 'ເກີດຂໍ້ຜິດພາດ!',
+        text: 'ບໍ່ສາມາດເປີດໂຕະໄດ້, ກະລຸນາລອງໃໝ່ອີກຄັ້ງ.',
+        confirmButtonColor: '#ea580c',
+        fontFamily: 'Noto Sans Lao'
+      });
+    } else {
+      // ✅ ແຈ້ງເຕືອນເມື່ອເປີດໂຕະສຳເລັດ (Toast ມຸມຂວາເທິງ ບໍ່ກວນໜ້າຈໍ)
+      Swal.fire({
+        icon: 'success',
+        title: 'ເປີດໂຕະ ແລະ ສ້າງ QR Code ເລີຍ!',
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+      });
+    }
   };
 
-  // ຟັງຊັນ Checkout
+  // 🎯 ຟັງຊັນ Checkout / ຊຳລະເງິນ (ປ່ຽນເປັນ SweetAlert2 ແລ້ວ)
   const handleCheckout = async (tableId) => {
+    // 💡 ເພີ່ມ Pop-up ຖາມເພື່ອຄວາມແນ່ໃຈກ່ອນຕັດເງິນ (Confirmation Dialog)
+    const result = await Swal.fire({
+      title: 'ຢືນຢັນການຊຳລະເງິນ?',
+      text: `ໂຕະນີ້ເລືອກຊຳລະດ້ວຍ: ${paymentMethod === 'cash' ? '💵 ເງິນສົດ' : '📱 ໂອນເງິນ (OnePay)'}`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ea580c', // ສີສົ້ມ Puckluck
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: 'ຢືນຢັນ, ຮັບເງິນແລ້ວ',
+      cancelButtonText: 'ຍົກເລີກ',
+      reverseButtons: true
+    });
+
+    // ຖ້າຜູ້ໃຊ້ກົດ Cancel ໃຫ້ຢຸດການເຮັດວຽກທັນທີ
+    if (!result.isConfirmed) return;
+
     try {
       const { error: tableError } = await supabase
         .from('Tables')
@@ -128,14 +191,28 @@ export default function DashboardPage() {
       setIsBillingMode(false);
       setSelectedTable(null);
       fetchTables();
-      alert("🎉 ຊຳລະεງິນສຳເລັດແລ້ວ!");
+
+      // 🎉 ແຈ້ງເຕືອນເມື່ອຊຳລະເງິນສຳເລັດແບບອະລັງການ
+      Swal.fire({
+        icon: 'success',
+        title: '🎉 ຊຳລະເງິນສຳເລັດແລ້ວ!',
+        text: 'ລະບົບໄດ້ຕັດຈ່າຍບິນ ແລະ ເຄຍໂຕະໃຫ້ຫວ່າງຮຽບຮ້ອຍ.',
+        confirmButtonColor: '#16a34a', // ສີຂຽວ Success
+      });
 
     } catch (error) {
-      alert("ເກີດຂໍ້ຜິດພາດ: " + error.message);
+      // ❌ ແຈ້ງເຕືອນ Error
+      Swal.fire({
+        icon: 'error',
+        title: 'ເກີດຂໍ້ຜິດພາດ!',
+        text: error.message,
+        confirmButtonColor: '#ea580c',
+      });
     }
   };
 
   return (
+    // ... (ສ່ວນ JSX ດ້ານລຸ່ມຄືເກົ່າທຸກຢ່າງ ບໍ່ມີການປ່ຽນແປງ) ...
     <div className="flex min-h-screen bg-gray-50 font-lao text-slate-800">
       <main className="flex-1 p-8 overflow-y-auto">
         <header className="flex justify-between items-center mb-8">
@@ -156,7 +233,7 @@ export default function DashboardPage() {
               }`}
             >
               <div className="flex justify-between mb-2">
-                <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${table.status === 'ບໍ່ຫວ້າງ' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
+                <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${table.status === 'ບໍ່ຫວ้าง' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
                   {table.status || 'ໂຕະຫວ້າງ'}
                 </span>
               </div>
@@ -185,7 +262,6 @@ export default function DashboardPage() {
                   {tableOrders.length > 0 && tableOrders.some(o => o.items && o.items.length > 0) ? (
                     tableOrders.flatMap(order => order.items || []).map((item, idx) => {
                       
-                      // 🎯 ✨ ແກ້ໄຂບ່ອນນີ້: ໃຫ້ຮອງຮັບທັງ menu_name (ອາຫານ) ແລະ drink_name (ເຄື່ອງດື່ມ)
                       const baseName = item.laoName || item.menu_name || item.drink_name || item.item_name || "ບໍ່ມີຊື່ລາຍການ";
                       const englishName = item.menu_name || item.drink_name || "";
                       
@@ -193,7 +269,6 @@ export default function DashboardPage() {
                         ? `${item.laoName} (${englishName})`
                         : baseName;
 
-                      // 🎯 ປ້ອງກັນເລື່ອງຊື່ Key ຂອງຈຳນວນ (ບາງບ່ອນໃຊ້ quantity, ບາງບ່ອນໃຊ້ qty)
                       const quantity = item.quantity || item.qty || 1;
                       const itemPrice = item.price || (item.subtotal / quantity) || 0;
                       const displaySubtotal = item.subtotal || (itemPrice * quantity);
@@ -231,7 +306,7 @@ export default function DashboardPage() {
                       }`}
                     >
                       <Banknote size={20} /> 
-                      <span className="text-[10px] font-bold">เງິນສົດ</span>
+                      <span className="text-[10px] font-bold">ເງິນສົດ</span>
                     </button>
 
                     <button 
@@ -248,11 +323,11 @@ export default function DashboardPage() {
                     </button>
                   </div>
                   <button 
-  onClick={handlePrintClick}
-  className="w-full bg-slate-800 text-white py-3 rounded-2xl font-bold hover:bg-black transition-all mb-2 shadow-lg"
->
-  ພິມໃບບິນ
-</button>
+                    onClick={handlePrintClick}
+                    className="w-full bg-slate-800 text-white py-3 rounded-2xl font-bold hover:bg-black transition-all mb-2 shadow-lg"
+                  >
+                    ພິມໃບບິນ
+                  </button>
                   <button 
                     onClick={() => handleCheckout(selectedTable.table_id)}
                     className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold hover:bg-orange-600 shadow-lg"
@@ -314,18 +389,17 @@ export default function DashboardPage() {
       </aside>
 
       {selectedTable && (
-  <div style={{ display: 'none' }} className="print:block">
-    <div ref={componentRef}>
-      <PrintableReceipt 
-        tableNumber={selectedTable.table_number} 
-        // ຖ້າເປັນ Billing Mode ໃຫ້ສົ່ງລາຍການອາຫານໄປ, ຖ້າບໍ່ແມ່ນໃຫ້ສົ່ງ array ຫວ່າງ
-        items={isBillingMode ? tableOrders.flatMap(o => o.items || []) : []}
-        totalAmount={isBillingMode ? tableOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0) : 0}
-        qrValue={`https://bobo-jade.vercel.app?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
-      />
+        <div style={{ display: 'none' }} className="print:block">
+          <div ref={componentRef}>
+            <PrintableReceipt 
+              tableNumber={selectedTable.table_number} 
+              items={isBillingMode ? tableOrders.flatMap(o => o.items || []) : []}
+              totalAmount={isBillingMode ? tableOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0) : 0}
+              qrValue={`https://bobo-jade.vercel.app?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
+            />
+          </div>
+        </div>
+      )}
     </div>
-  </div>
-)}
-    </div>
-  ); 
+  );   
 }

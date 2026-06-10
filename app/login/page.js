@@ -2,33 +2,39 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-
-
+import Cookies from "js-cookie"; // 1. Import library ທີ່ຕິດຕັ້ງມາ
 
 export default function Page() {
-    const [username, setUsername] = useState(""); // ປ່ຽນຕາມ Column ໃນ Supabase ຂອງເຈົ້າ (username)
+    const [username, setUsername] = useState(""); 
     const [password, setPassword] = useState("");
     const router = useRouter();
 
-    const handlelogin = async (e) =>{
-      e.preventDefault();
+    const handlelogin = async (e) => {
+        e.preventDefault();
 
-      const {data,error}= await supabase
-      .from("Users")
-      .select("*")
-      .eq("username",username)
-      .eq("password",password)
-      .single()
+        const { data, error } = await supabase
+            .from("Users")
+            .select("*")
+            .eq("username", username)
+            .eq("password", password)
+            .single();
 
-      if(error){
-        alert("ລະຫັດບໍ່ຖືກຕ້ອງ");
-      } else {
-  alert("ເຂົ້າລະບົບສຳເລັດ");
-  // ບັນທຶກຂໍ້ມູນ User ໄວ້
-  localStorage.setItem("currentUser", JSON.stringify(data)); 
-  router.push("/admin/home");
-}
-    }
+        if (error || !data) {
+            alert("ຊື່ຜູ້ໃຊ້ ຫຼື ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ");
+        } else {
+            // 2. ບັນທຶກຂໍ້ມູນ User ໄວ້ໃນ LocalStorage (ສຳລັບນຳໃຊ້ໃນໜ້າຕ່າງໆ)
+            localStorage.setItem("currentUser", JSON.stringify(data)); 
+            
+            // 3. 🌟 ສຳຄັນ: ສ້າງ Cookie ທີ່ Middleware ຂອງທ່ານກຳລັງກວດສອບ
+            // ຕ້ອງໃຊ້ຊື່ 'isLoggedIn' ໃຫ້ກົງກັບທີ່ຂຽນໃນ middleware.js
+            Cookies.set("isLoggedIn", "true", { expires: 1 }); 
+
+            alert("ເຂົ້າລະບົບສຳເລັດ");
+            router.push("/admin/home");
+        }
+    };
+
+    // ... (ສ່ວນ return ຍັງຄືເກົ່າ ບໍ່ຕ້ອງແກ້ໄຂ)
     return (
         /* 1. ตัวแม่: ใช้ relative และสั่งให้สูงเต็มจอ (h-screen) */
         /* และใช้ flex items-center เพื่อจัดลูกให้ร่วงลงมาอยู่ตรงกลาง */
