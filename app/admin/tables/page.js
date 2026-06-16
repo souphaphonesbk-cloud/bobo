@@ -7,7 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Search, Bell, QrCode, CreditCard, UserPlus, Timer, CheckCircle2, Banknote, ChevronLeft } from 'lucide-react';
 import PrintableReceipt from '../../compronent/PrintableReceipt'; 
 // 🔔 Import SweetAlert2 ເຂົ້າວຽກ
-import Swal from 'sweetalert2';
+import Swal from 'sweetalert2';   
 
 export default function DashboardPage() {
   const [tables, setTables] = useState([]);
@@ -373,6 +373,7 @@ export default function DashboardPage() {
                     <button onClick={() => handleOpenTable(selectedTable.table_id)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700">
                       \ ເປີດໂຕະ / Gen QR
                     </button>
+
                   </div>
                 )}
               </>
