@@ -263,7 +263,7 @@ const handleConfirmOrder = async () => {
         
         {/* Header */}
         <div className="flex items-center p-6 mt-4">
-          <Link href="/">
+          <Link href={`/?table=${localStorage.getItem("puckluck_table_number")}&id=${localStorage.getItem("puckluck_table_id")}`}>
             <button className="p-2 bg-gray-100 rounded-xl">
               <img src="/icon/left.svg" className="w-4 h-4" alt="back" />
             </button>
