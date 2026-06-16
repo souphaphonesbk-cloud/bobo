@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 export function middleware(request) {
   const isLoggedIn = request.cookies.get('isLoggedIn')?.value;
   const { pathname, searchParams } = request.nextUrl;
+
+  if (searchParams.has('table') || searchParams.has('id') || searchParams.has('token')) {
+    return NextResponse.next();
+  }
   
   const isLoginPage = pathname === '/';
   const hasTableParams = searchParams.has('table') || searchParams.has('id');
@@ -25,6 +29,7 @@ export function middleware(request) {
   if (isLoggedIn && isLoginPage) {
     return NextResponse.redirect(new URL('/admin/home', request.url));
   }
+  
 
   return NextResponse.next();
 }
