@@ -40,12 +40,12 @@ export default function KitchenPage() {
         .order('id', { ascending: true });
 
       // 2. ດຶງອໍເດີທີ່ສຳເລັດແລ້ວ (completed) ຂອງມື້ນີ້
-      const today = new Date().toISOString().split('T')[0];
+      const todayStart = new Date().toISOString().split('T')[0] + 'T00:00:00';
       const { data: historyData, error: historyError } = await supabase
         .from('Orders')
         .select('*')
         .eq('order_status', 'completed')
-        .eq('order_date', today) 
+        .gte('order_date', todayStart)
         .order('id', { ascending: false });
 
       if (activeError) throw activeError;

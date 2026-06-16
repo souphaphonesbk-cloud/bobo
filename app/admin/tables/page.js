@@ -391,11 +391,14 @@ export default function DashboardPage() {
       {selectedTable && (
         <div style={{ display: 'none' }} className="print:block">
           <div ref={componentRef}>
+            console.log("ກຳລັງຈະພິມອໍເດີເລກທີ:", currentOrder?.id);
             <PrintableReceipt 
               tableNumber={selectedTable.table_number} 
               items={isBillingMode ? tableOrders.flatMap(o => o.items || []) : []}
               totalAmount={isBillingMode ? tableOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0) : 0}
               qrValue={`https://bobo-jade.vercel.app?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
+             orderId={tableOrders.length > 0 ? tableOrders[0].order_id : "ບໍ່ມີ"}
+             createdAt={tableOrders.length > 0 ? tableOrders[0].order_date : new Date()}
             />
           </div>
         </div>

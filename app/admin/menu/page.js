@@ -331,15 +331,6 @@ export default function CounterPage() {
               className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-2xl shadow-sm focus:ring-2 focus:ring-orange-200 outline-none text-sm transition-all"
             />
           </div>
-          <div className="flex items-center gap-4">
-            <button className="p-3 bg-white rounded-2xl shadow-sm text-gray-400 hover:text-orange-500 transition-all">
-              <Bell size={20} />
-            </button>
-            <div className="flex items-center gap-3 bg-white p-1.5 pr-4 rounded-2xl shadow-sm border border-gray-100">
-              <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center font-bold">DB</div>
-              <span className="text-sm font-bold text-gray-700">Counter Admin</span>
-            </div>
-          </div>
         </header>
 
         <div className="flex flex-col lg:flex-row gap-8">

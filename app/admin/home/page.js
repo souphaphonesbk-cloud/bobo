@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 // 📊 ປັບ Import ມາໃຊ້ AreaChart ຫຼື BarChart ທີ່ເນັ້ນສະແດງແນວໂນ້ມລາຍເດືອນ
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import Swal from 'sweetalert2';
 
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState({
@@ -24,6 +25,8 @@ export default function DashboardPage() {
   const [chartData, setChartData] = useState([]);
   const [topItems, setTopItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pendingBills, setPendingBills] = useState([]);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     async function getDashboardData() {
@@ -163,6 +166,63 @@ export default function DashboardPage() {
     getDashboardData();
   }, []);
 
+useEffect(() => {
+  // 1. ຟັງຊັນດຶງຂໍ້ມູນບິນຄ້າງໄວ້
+  const fetchPendingBills = async () => {
+    const { data } = await supabase
+      .from('Orders')
+      .select('*')
+      .eq('order_status', 'bill_requested');
+    setPendingBills(data || []);
+  };
+  
+  // ດຶງຂໍ້ມູນເທື່ອທຳອິດ
+  fetchPendingBills();
+
+  // 2. ສ້າງ Channel ສຳລັບ Realtime
+  const channel = supabase
+    .channel('dashboard-sync')
+    .on(
+      'postgres_changes', 
+      { event: '*', schema: 'public', table: 'Orders' }, 
+      (payload) => {
+        // ອັບເດດ List ຢູ່ໜ້າຈໍທັນທີ
+        fetchPendingBills();
+
+        // ຖ້າເປັນການກົດຂໍເຊັກບິນໃໝ່ (Status ປ່ຽນເປັນ bill_requested) -> ໃຫ້ Alert
+        if (payload.new && payload.new.order_status === 'bill_requested' && payload.old.order_status !== 'bill_requested') {
+          Swal.fire({
+            title: `🔔 ໂຕະທີ ${payload.new.table_id || '??'} ຂໍເຊັກບິນ!`,
+            text: 'ລູກຄ້າຕ້ອງການຊຳລະເງິນ, ກະລຸນາກວດສອບ.',
+            icon: 'warning',
+            confirmButtonText: 'ຮັບຊາບ',
+            confirmButtonColor: '#ea580c',
+            allowOutsideClick: false
+          });
+        }
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
+
+const handleCompleteBill = async (orderId) => {
+  setIsUpdating(true); // ຕອນນີ້ມັນຈະຮູ້ຈັກຟັງຊັນນີ້ແລ້ວ
+  try {
+    await supabase
+      .from('Orders')
+      .update({ order_status: 'completed' })
+      .eq('order_id', orderId);
+  } catch (error) {
+    console.error("Error updating bill:", error);
+  } finally {
+    setIsUpdating(false); // ປິດສະຖານະ loading
+  }
+};
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 font-lao">
@@ -179,8 +239,8 @@ export default function DashboardPage() {
         
         <header className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-black text-gray-950">Dashboard ສະຫຼຸບຍອດຂາຍ</h1>
-            <p className="text-sm text-gray-500 mt-1">ຮ້ານອາຫານປັກຫຼັກ (ຂໍ້ມູນສະຫຼຸບລາຍເດືອນ)</p>
+            <h1 className="text-2xl font-black text-gray-950">Dashboard </h1>
+            <p className="text-sm text-gray-500 mt-1">ຮ້ານອາຫານປັກຫຼັກ </p>
           </div>
         </header>
 
@@ -255,6 +315,29 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           </div>
         </div>
+        {pendingBills.length > 0 && (
+  <div className="bg-red-50 border-2 border-red-200 p-6 rounded-3xl mt-6">
+    <h3 className="font-black text-red-600 text-lg flex items-center gap-2 mb-4">
+      🚨 ລາຍການລໍຖ້າເຊັກບິນ ({pendingBills.length})
+    </h3>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {pendingBills.map((order) => (
+        <div key={order.order_id} className="bg-white p-4 rounded-2xl shadow-sm border border-red-100 flex justify-between items-center">
+          <div>
+            <p className="font-bold text-gray-800">ໂຕະທີ: {order.table_id}</p>
+            <p className="text-sm text-gray-500">ຍອດ: {Number(order.total_amount).toLocaleString()} ₭</p>
+          </div>
+          <button 
+            onClick={() => handleCompleteBill(order.order_id)}
+            className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold"
+          >
+            ສຳເລັດ
+          </button>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
       </main>
 

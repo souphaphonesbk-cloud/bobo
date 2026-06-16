@@ -2,14 +2,16 @@
 import Link from 'next/link';
 import { useState, useEffect, Suspense } from "react";
 import { supabase } from '../../lib/supabase';
+import Swal from 'sweetalert2';
 
 export function MyOrderPage() {
   const [cartItems, setCartItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);   
   const [isOrdered, setIsOrdered] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [tableInfo, setTableInfo] = useState({ number: "??", id: null });
   const [orderNote, setOrderNote] = useState("");
+  const [currentOrderId, setCurrentOrderId] = useState(null);
 
   useEffect(() => {
     setMounted(true);
@@ -52,15 +54,15 @@ useEffect(() => {
             const matchedKey = customIds.find(id => id === `menu_${item.menu_id}` || id === String(item.menu_id));
             if (matchedKey) {
               combinedData.push({
-                id: item.menu_id,
-                custom_id: matchedKey,
-                name: item.menu_name,
-                laoName: item.laoName || "",
-                price: Number(item.price),
-                image: item.image, 
-                qty: savedCart[matchedKey] || 0,
-                is_drink: false
-              });
+  id: item.menu_id,
+  custom_id: matchedKey,
+  name: item.menu_name,      // ໃຫ້ແນ່ໃຈວ່າໃຊ້ menu_name ຕາມ DB
+  laoName: item.laoName || "",
+  price: Number(item.price),
+  image: item.image,
+  qty: savedCart[matchedKey] || 0,
+  is_drink: false
+});
             }
           });
         }
@@ -83,15 +85,15 @@ useEffect(() => {
             
             if (matchedKey) {
               combinedData.push({
-                id: item.drink_id,
-                custom_id: matchedKey,
-                name: item.drink_name,       // ຕົງກັບ drink_name ໃນ DB
-                laoName: item.laoName || "", // ຕົງກັບ laoName ໃນ DB
-                price: Number(item.price),   // ຕົງກັບ price ໃນ DB
-                image: item.image,           // ຕົງກັບ image ໃນ DB
-                qty: savedCart[matchedKey] || 0,
-                is_drink: true
-              });
+  id: item.drink_id,
+  custom_id: matchedKey,
+  name: item.drink_name,     // ໃຫ້ແນ່ໃຈວ່າໃຊ້ drink_name ຕາມ DB
+  laoName: item.laoName || "",
+  price: Number(item.price),
+  image: item.image,
+  qty: savedCart[matchedKey] || 0,
+  is_drink: true
+});
             }
           });
         }
@@ -128,67 +130,132 @@ useEffect(() => {
 
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
 
-  const handleConfirmOrder = async () => {
-    const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+const handleConfirmOrder = async () => {
+    // 1. ກວດສອບກ່ອນສັ່ງ
+    if (cartItems.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'ຕະກ້າຫວ່າງເປົ່າ',
+        text: 'ກະລຸນາເລືອກລາຍການອາຫານກ່ອນສັ່ງຊື້',
+        confirmButtonColor: '#FBBF24'
+      });
+      return;
+    }
+
+    // 2. ຖາມຢືນຢັນ
+    const result = await Swal.fire({
+      title: 'ຢືນຢັນການສັ່ງຊື້?',
+      html: `ຍອດລວມທັງໝົດ <b>${subtotal.toLocaleString()} ກີບ</b>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#FBBF24',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'ຢືນຢັນ',
+      cancelButtonText: 'ຍົກເລີກ'
+    });
+
+    if (!result.isConfirmed) return;
+
+    // 3. ສະແດງ Loading ລະຫວ່າງເຮັດວຽກ
+    Swal.fire({
+      title: 'ກຳລັງສົ່ງອໍເດີ...',
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading(); }
+    });
 
     try {
-      if (cartItems.length === 0) {
-        alert("ບໍ່ມີລາຍການອາຫານໃນຕະກ້າ");
-        return;
-      }
-
-      // 🎯 1. ປ່ຽນມາໃຊ້ Timestamp ແບບຕົວເລກ (int8) ແທນການສຸ່ມ ປ້ອງກັນຄ່າ Null ແລະ ບໍ່ຊ້ຳກັນແນ່ນອນ
       const generatedOrderId = Date.now(); 
-
-      // 2. ຈັດໂຄງສ້າງຂໍ້ມູນກ່ອນສົ່ງໄປ Supabase
       const rowsToInsert = cartItems.map(item => ({
-        order_id: generatedOrderId,               // 🎯 ສົ່ງ Timestamp ໄປເປັນເລກບິນ (int8)
+        order_id: generatedOrderId,
         table_id: Number(tableInfo.id) || null,
-        total_amount: totalAmount,
+        total_amount: subtotal,
         payment_status: 'unpaid',
         order_status: 'pending',
         order_note: orderNote || "",
-        
-        // 🎯 ປ້ອນຄ່າໃສ່ ID ຄໍລຳດ້ານນອກໃຫ້ຖືກຕ້ອງຕາມປະເພດສິນຄ້າ
         menu_id: item.is_drink ? null : Number(item.id),
         drink_id: item.is_drink ? Number(item.id) : null,
         category_id: item.is_drink ? null : (Number(item.category_id) || null),
-        category_drink_id: item.is_drink ? (Number(item.category_id) || null) : null, // 🎯 ເພີ່ມຄໍລຳນີ້ໃຫ້ຕົງກັບ DB
-        
-        // 🎯 ແກ້ Bug ຫ້ອງຄົວ: ຝັງຂໍ້ມູນຊື່ເມນູທັງໝົດລົງໄປໃນຄໍລຳ items (JSON) ເລີຍ 
-        // ເຮັດໃຫ້ໜ້າຫ້ອງຄົວ (Kitchen) ສາມາດອ່ານຄ່າ item.menu_name ໄປສະແດງໄດ້ທັນທີ ບໍ່ວ່າຈະເປັນ Food ຫຼື Drink!
+        category_drink_id: item.is_drink ? (Number(item.category_id) || null) : null,
         items: [{
           id: Number(item.id),
-          menu_name: item.name || "Unknown", // 🎯 ຝັງຊື່ພາສາອັງກິດ/ຫຼັກ
-          laoName: item.laoName || "",       // 🎯 ຝັງຊື່ພາສາລາວ (ຫ້ອງຄົວຈະອ່ານຄ່າໂຕນີ້)
-          quantity: Number(item.qty) || 1,
-          price: Number(item.price) || 0,
-          subtotal: Number(item.price * item.qty) || 0,
+          menu_name: item.name || "ບໍ່ມີຊື່",
+          laoName: item.laoName || "",
+          quantity: Number(item.qty),
+          price: Number(item.price),
+          subtotal: Number(item.price * item.qty),
           is_drink: item.is_drink
         }]
       }));
-
-      console.log("Data to insert:", rowsToInsert); // ສາມາດເປີດຊ່ອງ Console ເບິ່ງຂໍ້ມູນກ່ອນຍິງໄດ້
-
-      // 3. Insert ລົງຕາຕະລາງ Orders ຢູ່ Supabase
-      const { data, error: orderError } = await supabase
-        .from('Orders')
-        .insert(rowsToInsert); 
-
-      if (orderError) {
-        console.error("Supabase Error Details:", orderError);
-        throw orderError;
-      }
-      
+      setCurrentOrderId(generatedOrderId); // ເພີ່ມບັນທັດນີ້ໃສ່
       setIsOrdered(true);
-      alert("ສົ່ງອໍເດີສຳເລັດແລ້ວ!");
-      localStorage.removeItem('puckluck_cart'); // ເຄຼຍຕະກ້າສິນຄ້າ
+
+      const { error: orderError } = await supabase.from('Orders').insert(rowsToInsert); 
+      if (orderError) throw orderError;
+      
+      // 4. ເມື່ອສຳເລັດ
+      setIsOrdered(true);
+      localStorage.removeItem('puckluck_cart');
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'ສັ່ງອາຫານສຳເລັດ!',
+        confirmButtonColor: '#22C55E'
+      });
       
     } catch (error) {
-      console.error("Error During Confirmation:", error.message);
-      alert("ເກີດຂໍ້ຜິດພາດ: " + error.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'ເກີດຂໍ້ຜິດພາດ',
+        text: 'ບໍ່ສາມາດສົ່ງອໍເດີໄດ້: ' + error.message
+      });
     }
   };
+
+  const handleRequestBill = async () => {
+  if (!currentOrderId) {
+    Swal.fire("ຜິດພາດ", "ບໍ່ພົບຂໍ້ມູນອໍເດີ, ກະລຸນາສັ່ງອາຫານກ່ອນ", "error");
+    return;
+  }
+
+  // 1. ເພີ່ມປ່ອງຢືນຢັນກ່ອນກົດຂໍເຊັກບິນ
+  const confirmResult = await Swal.fire({
+    title: 'ຢືນຢັນການຂໍເຊັກບິນ?',
+    text: "ເມື່ອກົດຢືນຢັນແລ້ວ, ພະນັກງານຈະໄດ້ຮັບການແຈ້ງເຕືອນທັນທີ",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#3b82f6', // ສີຟ້າ
+    cancelButtonColor: '#d33',
+    confirmButtonText: 'ຢືນຢັນ, ຂໍເຊັກບິນເລີຍ',
+    cancelButtonText: 'ຍົກເລີກ'
+  });
+
+  // ຖ້າລູກຄ້າກົດຍົກເລີກ ໃຫ້ຢຸດການເຮັດວຽກ
+  if (!confirmResult.isConfirmed) return;
+
+  // 2. ສະແດງ Loading ລະຫວ່າງສົ່ງຂໍ້ມູນ
+  Swal.fire({
+    title: 'ກຳລັງດຳເນີນການ...',
+    allowOutsideClick: false,
+    didOpen: () => { Swal.showLoading(); }
+  });
+
+  // 3. ສົ່ງຄຳຮ້ອງຂໍໄປຫາ Supabase
+  const { error } = await supabase
+    .from('Orders')
+    .update({ order_status: 'bill_requested' })
+    .eq('order_id', currentOrderId);
+
+  if (error) {
+    Swal.fire("ເກີດຂໍ້ຜິດພາດ", error.message, "error");
+  } else {
+    Swal.fire({
+      icon: 'success',
+      title: 'ສົ່ງຄຳຮ້ອງຂໍສຳເລັດ!',
+      text: 'ກະລຸນາລໍຖ້າພະນັກງານມາເກັບເງິນ',
+      confirmButtonColor: '#22C55E'
+    });
+  }
+};
   
   return (
     <div className="bg-gray-50 min-h-screen pb-10 w-full flex flex-col ">
@@ -312,6 +379,14 @@ useEffect(() => {
           >
             {isOrdered ? "ສົ່ງອໍເດີສຳເລັດແລ້ວ" : "ຢືນຢັນການສັ່ງຊື້"}
           </button>
+          {isOrdered && (
+  <button 
+    onClick={handleRequestBill}
+    className="w-full py-4 mt-3 bg-blue-500 text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-all"
+  >
+    ຂໍເຊັກບິນ
+  </button>
+)}
         </div>
       </div>
     </div>

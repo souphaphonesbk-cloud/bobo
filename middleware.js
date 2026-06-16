@@ -6,12 +6,13 @@ export function middleware(request) {
   const url = request.nextUrl.clone()
   const { pathname } = url
   
-  const isLoginPage = pathname === '/login'
+  const isLoginPage = pathname === '/'
 
   // 🌟 2. ເພີ່ມເງື່ອນໄຂຍົກເວັ້ນ: ສະເພາະໜ້າຂອງລູກຄ້າເທົ່ານັ້ນ (ເອົາ /login ອອກຈາກກຸ່ມນີ້)
   if (
     pathname === '/' || 
     pathname.startsWith('/table') || 
+    pathname.startsWith('/customer') ||
     pathname.startsWith('/my-oder')    
   ) {
     return NextResponse.next()
@@ -19,7 +20,7 @@ export function middleware(request) {
 
   // 🎯 ເງື່ອນໄຂທີ 1: ຖ້າ "ຍັງບໍ່ລັອກອິນ" ແລະ "ບໍ່ໄດ້ຢູ່ໜ້າ login" -> ໃຫ້ດີດໄປໜ້າ login
   if (!isLoggedIn && !isLoginPage) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
   // 🎯 ເງື່ອນໄຂທີ 2: ຖ້າ "ລັອກອິນແລ້ວ" ແຕ່ພະຍາຍາມເຂົ້າໜ້າ login -> ໃຫ້ດີດໄປ Dashboard ທັນທີ

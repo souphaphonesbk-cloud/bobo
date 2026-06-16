@@ -77,7 +77,7 @@ const Sidebar = ({}) => {
             {[
               { id: 'home', name: 'ໜ້າຫຼັກ', icon: <LayoutDashboard size={20} />, path: '/admin/home' },
               { id: 'counter-order', name: 'ສັ່ງອາຫານ', icon: <LayoutDashboard size={20} />, path: '/admin/counter-order' },
-              { id: 'orders', name: 'ກາຂາຍ', icon: <History size={20} />, path: '/admin/orders' },
+              { id: 'orders', name: 'ການຂາຍ', icon: <History size={20} />, path: '/admin/orders' },
               { id: 'tables', name: 'ສະຖານະໂຕະ', icon: <Table2 size={20} />, path: '/admin/tables' },
               { id: 'stock-in', name: 'ນຳເຂົ້າສິນຄ້າ', icon: <Wallet size={20} />, path: '/admin/stock-in' },
               { id: 'menu', name: 'ຈັດການເມນູ', icon: <UtensilsCrossed size={20} />, path: '/admin/menu' },

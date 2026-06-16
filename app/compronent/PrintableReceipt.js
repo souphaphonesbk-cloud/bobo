@@ -1,33 +1,59 @@
 "use client";
 
-export default function PrintableReceipt({ tableNumber, qrValue, items = [], totalAmount = 0 }) {
-  const isBill = items.length > 0; // ກວດສອບວ່ານີ້ແມ່ນໃບບິນ ຫຼື QR Code
+export default function PrintableReceipt({ tableNumber, qrValue, items = [], totalAmount = 0, orderId, createdAt }) {
+  console.log("OrderID:", orderId);
+  console.log("CreatedAt:", createdAt);
+  const isBill = items.length > 0;
 
   return (
     <div 
       id="receipt-print-area" 
       className="hidden print:block bg-white text-black p-4 font-lao mx-auto" 
-      style={{ width: '58mm', fontSize: '12px' }}
+      style={{ width: '58mm', fontSize: '12px' ,fontFamily: "'Phetsarath OT', sans-serif"}}
+      
     >
       {/* ຫົວໃບບິນ */}
       <div className="text-center border-b border-dashed border-black pb-3 mb-3">
         <h2 className="text-base font-black">ຮ້ານ Puckluck</h2>
-        <div className="text-lg font-black mt-2 bg-black text-white py-1 rounded">
-           {tableNumber}
-        </div>
+        
+       {/* ຂໍ້ມູນອໍເດີ ແລະ ເວລາ */}
+{isBill && (
+  <div className="text-[10px] text-left mt-2 space-y-0.5">
+ <div>ເລກທີບິນ: {orderId ? orderId : "---"}</div>
+    <div>
+      ວັນທີ: {createdAt && !isNaN(new Date(createdAt).getTime()) 
+        ? new Date(createdAt).toLocaleDateString('lo-LA') 
+        : new Date().toLocaleDateString('lo-LA')}
+    </div>
+    <div>
+      ເວລາ: {createdAt && !isNaN(new Date(createdAt).getTime()) 
+        ? new Date(createdAt).toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' }) 
+        : new Date().toLocaleTimeString('lo-LA', { hour: '2-digit', minute: '2-digit' })}
+    </div>  
+  </div>
+)}
+<div>
+       {tableNumber}
+    </div>
       </div>
 
       {isBill ? (
         /* ຖ້າເປັນໃບບິນຊຳລະເງິນ */
         <div className="space-y-2">
           {items.map((item, idx) => {
-  // 🎯 ກຳນົດຊື່ໃຫ້ສະແດງທັງລາວ ແລະ ອັງກິດ
-  const laoName = item.laoName || "";
-  const englishName = item.menu_name || item.drink_name || "";
-  const displayName = laoName && englishName 
-    ? `${laoName} (${englishName})` 
-    : (laoName || englishName || "ລາຍການບໍ່ລະບຸຊື່");
+  // 1. ອີງຕາມ Database: menu_name ແມ່ນຊື່ພາສາອັງກິດ, laoName ແມ່ນຊື່ພາສາລາວ
+  const laoName = item.laoName;
+  const englishName = item.menu_name; // ໃຊ້ menu_name ເປັນຊື່ພາສາອັງກິດ
 
+  // 2. Logic ການສະແດງຜົນ
+  // ຖ້າມີທັງສອງຊື່ ແລະ ບໍ່ແມ່ນຊື່ດຽວກັນ ໃຫ້ສະແດງຄູ່ກັນ
+  let displayName = laoName;
+  if (laoName && englishName && laoName !== englishName) {
+    displayName = `${laoName} (${englishName})`;
+  } else if (!laoName && englishName) {
+    displayName = englishName; // ຖ້າບໍ່ມີຊື່ລາວ ໃຫ້ເອົາຊື່ອັງກິດ
+  }
+  
   return (
     <div key={idx} className="flex justify-between text-[11px] mb-1">
       <span>{item.quantity}x {displayName}</span>

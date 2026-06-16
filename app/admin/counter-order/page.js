@@ -11,6 +11,7 @@ export default function CounterOrderPage() {
   const [allDrinks, setAllDrinks] = useState([]);   
   const [filteredMenus, setFilteredMenus] = useState([]); 
   const [selectedCategory, setSelectedCategory] = useState('ອາຫານ'); 
+  const [currentOrderId, setCurrentOrderId] = useState(null);
   
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -184,6 +185,7 @@ export default function CounterOrderPage() {
       }
 
       const generatedOrderId = Math.floor(1000 + Math.random() * 9000);
+      setCurrentOrderId(generatedOrderId);
 
       const insertRows = cart.map(item => {
         const isDrink = item.is_drink || false;
@@ -198,14 +200,16 @@ export default function CounterOrderPage() {
           payment_method: chosenPaymentMethod,
           order_type: orderType === 'eating_in' ? 'dine_in' : 'take_away',
           order_note: orderNote,
-          items: cart.map(c => ({                            
-            menu_id: c.menu_id,
-            menu_name: c.laoName || c.menu_name,
-            quantity: c.quantity,
-            price: c.price,
-            subtotal: c.price * c.quantity,
-            is_drink: c.is_drink || false
-          })),
+
+         items: cart.map(c => ({                        
+  menu_id: c.menu_id,
+  laoName: c.laoName,      // ສົ່ງຊື່ລາວໄປຕ່າງຫາກ
+  menu_name: c.menu_name,  // ສົ່ງຊື່ອັງກິດໄປຕ່າງຫາກ
+  quantity: c.quantity,
+  price: c.price,
+  subtotal: c.price * c.quantity,
+  is_drink: c.is_drink || false
+})),
 
           menu_id: !isDrink ? item.menu_id : null,          
           category_id: !isDrink ? item.category_id : null,   
@@ -410,6 +414,7 @@ export default function CounterOrderPage() {
       <div style={{ display: 'none' }}>
         <div ref={componentRef}>
           <PrintableReceipt 
+          orderId={currentOrderId}
             tableNumber={orderType === 'eating_in' ? `ໂຕະ ${tableId}` : 'ສັ່ງກັບບ້ານ'} 
             items={cart.map(item => ({
               ...item,
