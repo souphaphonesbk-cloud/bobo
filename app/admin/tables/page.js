@@ -7,7 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Search, Bell, QrCode, CreditCard, UserPlus, Timer, CheckCircle2, Banknote, ChevronLeft } from 'lucide-react';
 import PrintableReceipt from '../../compronent/PrintableReceipt'; 
 // 🔔 Import SweetAlert2 ເຂົ້າວຽກ
-import Swal from 'sweetalert2';   
+import Swal from 'sweetalert2';
 
 export default function DashboardPage() {
   const [tables, setTables] = useState([]);
@@ -344,10 +344,11 @@ export default function DashboardPage() {
                     <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100 flex flex-col items-center">
                       <p className="text-xs font-bold text-orange-600 mb-2">QR ສັ່ງອາຫານ</p>
                       <div className="bg-white p-4 rounded-xl shadow-sm flex flex-col items-center">
-                        <QRCodeSVG 
-                          value={`https://bobo-jade.vercel.app?table=${selectedTable.table_number}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
-                          size={180} 
-                        />
+                        // ຕົວຢ່າງໃນ DashboardPage.js
+<QRCodeSVG 
+  value={`https://bobo-jade.vercel.app/customer?table=${encodeURIComponent(selectedTable.table_number)}&id=${selectedTable.table_id}&token=${selectedTable.qr_code_token}`} 
+  size={180} 
+/>
                       </div>
                     </div>
                     <button 
@@ -373,7 +374,6 @@ export default function DashboardPage() {
                     <button onClick={() => handleOpenTable(selectedTable.table_id)} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700">
                       \ ເປີດໂຕະ / Gen QR
                     </button>
-
                   </div>
                 )}
               </>

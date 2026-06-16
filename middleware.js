@@ -1,29 +1,27 @@
 import { NextResponse } from 'next/server'
 
 export function middleware(request) {
-  // 1. ອ່ານຄ່າ Cookie ທີ່ເຮົາຝັງໄວ້ຕອນລັອກອິນ
   const isLoggedIn = request.cookies.get('isLoggedIn')?.value
-  const url = request.nextUrl.clone()
-  const { pathname } = url
-  
-  const isLoginPage = pathname === '/login'
+  const { pathname } = request.nextUrl
 
-  // 🌟 2. ເພີ່ມເງື່ອນໄຂຍົກເວັ້ນ: ສະເພາະໜ້າຂອງລູກຄ້າເທົ່ານັ້ນ (ເອົາ /login ອອກຈາກກຸ່ມນີ້)
   if (
     pathname === '/' || 
     pathname.startsWith('/table') || 
-    pathname.startsWith('/my-oder')    
+    pathname.startsWith('/customer') ||
+    pathname.startsWith('/my-oder') // ໝາຍເຫດ: ໃຫ້ກວດເບິ່ງວ່າສະກົດຖືກບໍ່ (order ບໍ່ແມ່ນ oder)
   ) {
     return NextResponse.next()
   }
 
-  // 🎯 ເງື່ອນໄຂທີ 1: ຖ້າ "ຍັງບໍ່ລັອກອິນ" ແລະ "ບໍ່ໄດ້ຢູ່ໜ້າ login" -> ໃຫ້ດີດໄປໜ້າ login
-  if (!isLoggedIn && !isLoginPage) {
-    return NextResponse.redirect(new URL('/login', request.url))
+  // 2. ເງື່ອນໄຂສຳລັບ Admin (ພາກສ່ວນທີ່ເຫຼືອທັງໝົດທີ່ບໍ່ແມ່ນ Public)
+  
+  // ຖ້າ "ຍັງບໍ່ລັອກອິນ" -> ດີດໄປໜ້າ Login
+  if (!isLoggedIn) {
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // 🎯 ເງື່ອນໄຂທີ 2: ຖ້າ "ລັອກອິນແລ້ວ" ແຕ່ພະຍາຍາມເຂົ້າໜ້າ login -> ໃຫ້ດີດໄປ Dashboard ທັນທີ
-  if (isLoggedIn && isLoginPage) {
+  // ຖ້າ "ລັອກອິນແລ້ວ" ແຕ່ພະຍາຍາມເຂົ້າໜ້າ Login -> ໃຫ້ໄປໜ້າ Dashboard
+  if (isLoggedIn && pathname === '/') {
     return NextResponse.redirect(new URL('/admin/home', request.url))
   }
 
@@ -32,14 +30,6 @@ export function middleware(request) {
 
 export const config = {
   matcher: [
-    /*
-     * Match ທຸກໆ paths ຍົກເວັ້ນ:
-     * - api (endpoints ຕ່າງໆ)
-     * - _next/static (ຟາຍ static, CSS, JS ຂອງ Next.js)
-     * - _next/image (ຟາຍຮູບພາບລະບົບ)
-     * - favicon.ico (ໄອຄອນເວັບ)
-     * - ຟາຍ Fonts ແລະ ຮູບພາບຕ່າງໆ (.woff, .woff2, .ttf, .svg, .png, .jpg)
-     */
     '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf)$).*)',
   ],
 }
